@@ -37,7 +37,8 @@ int main (int argc, char *argv[]) {
     socklen_t client_len = sizeof (client);
 
     // Port numbers for tcp and udp
-    int tcpPort, udpPort;
+    int tcpPort = 8080;
+    int udpPort = 8081;
 
     int recv_len;
 
@@ -59,7 +60,7 @@ int main (int argc, char *argv[]) {
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons (0); // will allocate random port
+    server.sin_port = htons (tcpPort); // will allocate random port
     
     // get the port number for the tcp connection
     if (getsockname(tcpfd, (struct sockaddr*) &server, &addr_len) == -1)
@@ -67,8 +68,8 @@ int main (int argc, char *argv[]) {
 
     else {
         tcpPort = ntohs(server.sin_port);
-        printf("Binding tcp connection to port %d\n", tcpPort);  
-    }
+        printf("Binding tcp connection to port %d\n", tcpPort);
+    }  
 
     setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)); 
 
@@ -91,7 +92,7 @@ int main (int argc, char *argv[]) {
     //Config network
     bzero(&server, sizeof(server));   // Clear. 
     server.sin_family = AF_INET;       // IPv4.  
-    server.sin_port   = htons(0);   // port.  
+    server.sin_port   = htons(udpPort);   // port.  
     server.sin_addr.s_addr = htonl(INADDR_ANY); // ip.  
     
     // get udp port
