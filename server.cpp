@@ -22,7 +22,7 @@ void sig_child (int signo) {
     return;
 }
 
-int main (int argc, char **argv[]) {
+int main (int argc, char *argv[]) {
     
     // tcp, udp and connection file descriptors
     int tcpfd, udpfd, confd;
@@ -62,7 +62,7 @@ int main (int argc, char **argv[]) {
     server.sin_port = htons (0); // will allocate random port
     
     // get the port number for the tcp connection
-    if (getsockname(tcpfd, &server, &addr_len) == -1)
+    if (getsockname(tcpfd, (struct sockaddr*) &server, &addr_len) == -1)
         perror ("get sock name error");
 
     else {
@@ -73,7 +73,7 @@ int main (int argc, char **argv[]) {
     setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)); 
 
     
-    if (bind (tcpfd, &server, addr_len) < 0)
+    if (bind (tcpfd, (struct sockaddr*) &server, addr_len) < 0)
         perror ("");
 
     if (listen(tcpfd, MAX_CALLS) < 0)
@@ -95,7 +95,7 @@ int main (int argc, char **argv[]) {
     server.sin_addr.s_addr = htonl(INADDR_ANY); // ip.  
     
     // get udp port
-    if (getsockname(udpfd, &server, &addr_len) == -1)
+    if (getsockname(udpfd, (struct sockaddr*) &server, &addr_len) == -1)
         perror ("get sock name error");
 
     else {
@@ -104,7 +104,7 @@ int main (int argc, char **argv[]) {
     }
           
     //Bind socket.
-    int err_log = bind(udpfd, (struct sockaddr_in*)&server, sizeof(server));  
+    int err_log = bind(udpfd, (struct sockaddr*) &server, sizeof(server));  
         
     if(err_log != 0)  
     {  
@@ -113,7 +113,7 @@ int main (int argc, char **argv[]) {
         exit(-1);  
     } 
     
-    Signal (SIGCHLD, sig_child); 
+    signal (SIGCHLD, sig_child); 
     
     FD_ZERO(&rset);
     maxfdp1 = std::max (tcpfd, udpfd) + 1;
@@ -131,26 +131,26 @@ int main (int argc, char **argv[]) {
         
         // if a tcp connection is requested
         if (FD_ISSET(tcpfd, &rset)) {
-            confd = Accept (tcpfd, (struct sockaddr_in *) &client, 
+            confd = accept (tcpfd, (struct sockaddr*) &client, 
                     &client_len);
 
             // if child process
-            if ((childpid = Fork()) == 0) {
-                Close (tcpfd);
-                str_echo (confd); // process the request
+            if ((childpid = fork()) == 0) {
+                close (tcpfd);
+                //str_echo (confd); // process the request
                 exit (0);
             }
 
-            Close (confd);
+            close (confd);
         }
 
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
-            recv_len = Recvfrom(udpfd, message, MAXLINE, 0, 
-                    (struct sockaddr_in*)&client, &client_len);
+            recv_len = recvfrom(udpfd, message, MAXLINE, 0, 
+                    (struct sockaddr*)&client, &client_len);
 
-            Sendto (udpfd, message, recv_len, 0, 
-                    (struct sockaddr_in*)&client, client_len);
+            sendto (udpfd, message, recv_len, 0, 
+                    (struct sockaddr*)&client, client_len);
         }
     }
 }
