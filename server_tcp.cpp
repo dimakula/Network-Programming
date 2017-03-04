@@ -30,8 +30,9 @@
     {  
         unsigned short port = 8080; // Local pot. 
       
-        //Build UDP socket 
-        int sockfd = socket(AF_INET, SOCK_DGRAM, 0);   
+        //Build TCP socket
+	//TCP:STREAM. UDP:DGRAM.
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);   
         if(sockfd < 0)  
         {  
             perror("socket");  
