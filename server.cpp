@@ -1,5 +1,7 @@
 #include <stdlib.h>
-#include <string.h>
+#include <string> // for string
+#include <string.h> // for strlen
+#include <strings.h> // for bzero
 #include <unistd.h>
 #include <algorithm>
 #include <sys/wait.h>
@@ -13,6 +15,37 @@
 #define MAX_CALLS 5
 #define MAXLINE 512
 
+/*
+// code from professor's echo server for testing
+void udp_echo(int sockfd, sockaddr* pcliaddr, socklen_t clilen){
+	int n;
+	socklen_t len;
+	char mesg[MAXLINE];
+
+	for(;;){
+		len = clilen;
+		n = recvfrom(sockfd, mesg, MAXLINE, 0, pcliaddr, &len);
+		mesg[n-1]=0;
+		if(n==-1) perror("recv");
+		printf("received: %s from %s:%d\n", mesg, inet_ntoa(((sockaddr_in*)pcliaddr)->sin_addr), ntohs(((sockaddr_in*)pcliaddr)->sin_port));
+		//((sockaddr_in*)pcliaddr)->sin_port=htons(ntohs(((sockaddr_in*)pcliaddr)->sin_port)+1);
+		if((n=sendto(sockfd, mesg, n, 0, pcliaddr, len))==-1)
+			perror("sendto");
+		printf("sent:%d bytes %s to %s:%d\n", n, mesg, inet_ntoa(((sockaddr_in*)pcliaddr)->sin_addr), ntohs(((sockaddr_in*)pcliaddr)->sin_port));
+	}
+}
+*/
+
+void hallo (int sockfd) {
+
+  char buf [MAXLINE];
+  write (sockfd, "Hello!\n", strlen("Hello!\n"));
+  for(int i=0;i<3;i++) {
+      int msglen=read (sockfd, &buf, MAXLINE);
+      write(sockfd, &buf, msglen);
+  }
+}
+
 void sig_child (int signo) {
     pid_t pid;
     int stat;
@@ -23,6 +56,21 @@ void sig_child (int signo) {
 }
 
 int main (int argc, char *argv[]) {
+    
+    char c;
+    std::string filePath;
+    short int port;
+
+    while ((c=getopt(argc, argv, "d:p:"))!=-1) {
+        switch (c) {
+            case 'd' : filePath = optarg; break;
+            case 'p' : port = atoi (optarg); break;
+            default: 
+                printf ("Usage: %s [-d <file path>] [-p <port>]\n",
+                    argv[0]);
+                exit(1);
+        }
+    }
     
     // tcp, udp and connection file descriptors
     int tcpfd, udpfd, confd;
@@ -36,11 +84,9 @@ int main (int argc, char *argv[]) {
     socklen_t addr_len = sizeof (server);
     socklen_t client_len = sizeof (client);
 
-    // Port numbers for tcp and udp
-    int tcpPort = 8080;
-    int udpPort = 8081;
-
     int recv_len;
+
+    int tcpPort, udpPort;
 
     int childpid;
     void sig_child (int);
@@ -60,7 +106,7 @@ int main (int argc, char *argv[]) {
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
-    server.sin_port = htons (tcpPort); // will allocate random port
+    server.sin_port = htons (port);
     
     // get the port number for the tcp connection
     if (getsockname(tcpfd, (struct sockaddr*) &server, &addr_len) == -1)
@@ -90,7 +136,7 @@ int main (int argc, char *argv[]) {
     }  
           
     //Config network
-    bzero(&server, sizeof(server));   // Clear. 
+    bzero(&server, sizeof(server));   // Clear.
     server.sin_family = AF_INET;       // IPv4.  
     server.sin_port   = htons(udpPort);   // port.  
     server.sin_addr.s_addr = htonl(INADDR_ANY); // ip.  
@@ -137,6 +183,7 @@ int main (int argc, char *argv[]) {
 
             // if child process
             if ((childpid = fork()) == 0) {
+                hallo (confd);
                 close (tcpfd);
                 //str_echo (confd); // process the request
                 exit (0);
@@ -147,11 +194,14 @@ int main (int argc, char *argv[]) {
 
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
+            
+            //udp_echo (confd, client, client_len);
             recv_len = recvfrom(udpfd, message, MAXLINE, 0, 
                     (struct sockaddr*)&client, &client_len);
 
             sendto (udpfd, message, recv_len, 0, 
                     (struct sockaddr*)&client, client_len);
+                    
         }
     }
 }
