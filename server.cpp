@@ -49,7 +49,7 @@ int main (int argc, char **argv[]) {
     const int on = 1;
     
     // create listening TCP socket
-    if ((tcpfd = Socket (AF_INET, SOCK_STREAM, 0)) < 0) {
+    if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
         perror ("TCP Socket error");
         exit (1);
     }
@@ -70,7 +70,7 @@ int main (int argc, char **argv[]) {
         printf("Binding tcp connection to port %d\n", tcpPort);  
     }
 
-    Setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)); 
+    setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)); 
 
     
     if (bind (tcpfd, &server, addr_len) < 0)
@@ -104,7 +104,7 @@ int main (int argc, char **argv[]) {
     }
           
     //Bind socket.
-    int err_log = bind(udpfd, (struct sockaddr*)&server, sizeof(server));  
+    int err_log = bind(udpfd, (struct sockaddr_in*)&server, sizeof(server));  
         
     if(err_log != 0)  
     {  
