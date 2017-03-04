@@ -28,7 +28,7 @@
       
     int main(int argc, char *argv[])  
     {  
-        unsigned short port = 8080; // Local pot. 
+        unsigned short port = 8081; // Local pot. 
       
         //Build UDP socket 
         int sockfd = socket(AF_INET, SOCK_DGRAM, 0);   
