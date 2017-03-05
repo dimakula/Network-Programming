@@ -10,9 +10,19 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <errno.h>
+#include <sqlite3.h>
+#include <stdio.h>
 
 #define MAX_CALLS 5
 #define MAXLINE 512
+
+// get path separator for the specific os
+const char PathSeparator =
+    #ifdef _WIN32
+        '\\';
+    #else
+        '/';
+    #endif
 
 // tcp, udp and connection file descriptors
 int tcpfd, udpfd, confd;
@@ -70,6 +80,66 @@ void sig_child (int signo) {
     return;
 }
 
+static int
+callback (void *NotUsed, int argc, char **argv, char **azColName) {
+    int i;
+
+    for (i = 0; i < argc; i++) {
+        printf ("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+    }
+
+    printf("\n");
+    return 0;
+}
+
+// sets up sqlite database for storing gossip
+int setup_database (sqlite3 *db, int &rc, char *filePath) {
+    /*const char* dbName = "gossip.db";
+    int length = strlen (filePath) + strlen (dbName);
+    
+    
+    
+    filePath = filePath[strlen (filePath) - 1] == PathSeparator ?
+        strncat (filePath, dbName, length) :
+        strncat (filePath, PathSeparator + dbName, length);
+
+    printf("%s\n", filePath);*/
+    
+    printf("%s\n", filePath);
+    rc = sqlite3_open(filePath, &db);
+    
+    if (rc) {
+        fprintf (stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+        return (-1);
+    }
+    
+    char *sql = "DROP TABLE IF EXISTS PEERS;" \
+                "CREATE TABLE PEERS(" \
+                "PEER TEXT PRIMARY  KEY   NOT NULL,"  \
+                "PORT               INT   NOT NULL,"  \
+                "IP                 TEXT  NOT NULL);" \
+                
+                "DROP TABLE IF EXISTS GOSSIP;" \
+                "CREATE TABLE GOSSIP(" \
+                "PEER       TEXT NOT NULL," \
+                "MESSAGE    TEXT," \
+                "ENCRYPTION TEXT NOT NULL," \
+                "DATE       TEXT NOT NULL," \
+                "FOREIGN KEY (PEER) REFERENCES PEERS(PEER),";
+
+
+    char *zErrMsg = 0;
+
+    rc = sqlite3_exec (db, sql, callback, 0, &zErrMsg);
+
+    if (rc != SQLITE_OK) {
+        fprintf (stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free (zErrMsg);
+    }
+    
+}
+
+
 int main (int argc, char *argv[]) {
     // execute signal_stop method upon receiving control-c or control-z commands
     signal (SIGINT, signal_stop);
@@ -90,6 +160,12 @@ int main (int argc, char *argv[]) {
     }
     
     printf ("\nfilepath: %s port: %d\n", filePath, port);
+    
+    // database 
+    sqlite3 *db;
+    int rc;
+    
+    setup_database (db, rc, filePath);
     
     int maxfdp1, nready;
     int msgLength;
@@ -179,6 +255,8 @@ int main (int argc, char *argv[]) {
     signal (SIGCHLD, sig_child); 
     
     FD_ZERO(&rset);
+    
+    // keep track of the biggest file descriptor for the select statement
     maxfdp1 = std::max (tcpfd, udpfd) + 1;
 
     for ( ; ; ) {
