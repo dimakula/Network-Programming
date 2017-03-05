@@ -1,5 +1,4 @@
 #include <stdlib.h>
-//#include <string> // for string
 #include <string.h> // for strlen
 #include <strings.h> // for bzero
 #include <unistd.h>
@@ -15,26 +14,42 @@
 #define MAX_CALLS 5
 #define MAXLINE 512
 
-/*
-// code from professor's echo server for testing
-void udp_echo(int sockfd, sockaddr* pcliaddr, socklen_t clilen){
+// tcp, udp and connection file descriptors
+int tcpfd, udpfd, confd;
+
+// called upon hearing the control-C or control-Z signal
+void signal_stop (int a) {
+    printf ("\nCancelling server, closing all file handlers\n");
+    close (tcpfd);
+    close (udpfd);
+    close (confd);
+    fflush (stdout);
+    exit (1);
+}  
+
+void
+udp_handler(int sockfd, sockaddr* client, socklen_t client_len) {
 	int n;
 	socklen_t len;
-	char mesg[MAXLINE];
+	char message [MAXLINE];
+	
 
-	for(;;){
-		len = clilen;
-		n = recvfrom(sockfd, mesg, MAXLINE, 0, pcliaddr, &len);
-		mesg[n-1]=0;
-		if(n==-1) perror("recv");
-		printf("received: %s from %s:%d\n", mesg, inet_ntoa(((sockaddr_in*)pcliaddr)->sin_addr), ntohs(((sockaddr_in*)pcliaddr)->sin_port));
+	for( ; ;) {
+		len = client_len;
+		n = recvfrom(sockfd, message, MAXLINE, 0, client, &len);
+		message[n-1]=0;
+		
+		if(n==-1) 
+		    perror("UDP reading");
+		
+		printf("received: %s from %s:%d\n", message, inet_ntoa(((sockaddr_in*)client)->sin_addr), ntohs(((sockaddr_in*)client)->sin_port));
 		//((sockaddr_in*)pcliaddr)->sin_port=htons(ntohs(((sockaddr_in*)pcliaddr)->sin_port)+1);
-		if((n=sendto(sockfd, mesg, n, 0, pcliaddr, len))==-1)
+		if((n=sendto(sockfd, message, n, 0, client, len))==-1)
 			perror("sendto");
-		printf("sent:%d bytes %s to %s:%d\n", n, mesg, inet_ntoa(((sockaddr_in*)pcliaddr)->sin_addr), ntohs(((sockaddr_in*)pcliaddr)->sin_port));
+		printf("sent:%d bytes %s to %s:%d\n", n, message, inet_ntoa(((sockaddr_in*)client)->sin_addr), ntohs(((sockaddr_in*)client)->sin_port));
 	}
 }
-*/
+
 
 void hallo (int sockfd) {
 
@@ -56,7 +71,9 @@ void sig_child (int signo) {
 }
 
 int main (int argc, char *argv[]) {
-    
+    // execute signal_stop method upon receiving control-c or control-z commands
+    signal (SIGINT, signal_stop);
+    signal (SIGTSTP, signal_stop);
     char c;
     char* filePath;
     unsigned short int port;
@@ -74,8 +91,6 @@ int main (int argc, char *argv[]) {
     
     printf ("\nfilepath: %s port: %d\n", filePath, port);
     
-    // tcp, udp and connection file descriptors
-    int tcpfd, udpfd, confd;
     int maxfdp1, nready;
     int msgLength;
     fd_set rset; // check which file descriptor is set
@@ -160,6 +175,7 @@ int main (int argc, char *argv[]) {
         exit(-1);  
     } 
     
+    // catches signal when child is created
     signal (SIGCHLD, sig_child); 
     
     FD_ZERO(&rset);
