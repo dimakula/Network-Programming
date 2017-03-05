@@ -12,6 +12,10 @@
 #include <errno.h>
 #include <sqlite3.h>
 #include <stdio.h>
+#include <iostream>
+#include <sstream>
+
+using namespace std;
 
 #define MAX_CALLS 5
 #define MAXLINE 512
@@ -35,28 +39,90 @@ void signal_stop (int a) {
     close (confd);
     fflush (stdout);
     exit (1);
-}  
+}
+
+static int
+callback (void *NotUsed, int argc, char **argv, char **azColName) {
+    int i;
+
+    for (i = 0; i < argc; i++) {
+        printf ("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+    }
+
+    printf("\n");
+    return 0;
+}
+
+void reader (string fulltext, sqlite3 *db, int &rc) {
+  
+    string name, port, ip;
+    string digest, message, date;
+    string sql;
+    string values;
+
+    istringstream stream (fulltext);
+    string split;
+    
+    char *zErrMsg = 0;
+    
+    getline (stream, split, ':');
+    
+    if (split == "GOSSIP") {
+        getline (stream, digest, ':');
+        getline (stream, date, ':');
+        getline (stream, message, ':');
+        
+        values = "\'" + digest + "\', \'" + message +
+            "\', \'" + date + "\'";
+ 
+        sql = "INSERT INTO GOSSIP (DIGEST, MESSAGE, DATE)" \
+              "VALUES (" + values + ");";
+    
+    } else if (split == "PEER") {
+        getline (stream, name, ':');
+        
+        while (getline (stream, split, ':')) {
+            if (split == "PORT") {
+                getline (stream, port, '=');
+            
+            } else if ( split == "IP") {
+                getline (stream, ip, '=');
+            }
+        }
+        
+        values = "\'" + name + "\', " + port + ", \'" + ip + "\'";
+        
+        sql = "INSERT OR REPLACE INTO PEERS (PEER, PORT, IP)" \
+              "VALUES (" + values + ");";
+    
+    } else if (split == "PEERS?") {
+        sql = "SELECT * from PEERS;";
+    }
+
+     rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
+     
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);
+    }
+}
 
 void
-udp_handler(int sockfd, sockaddr* client, socklen_t client_len) {
-	int n;
+udp_handler(int sockfd, sockaddr *client, socklen_t client_len,
+        sqlite3 *db, int &rc) {
+	
+    int n;
 	socklen_t len;
 	char message [MAXLINE];
 	
-
 	for( ; ;) {
-		len = client_len;
-		n = recvfrom(sockfd, message, MAXLINE, 0, client, &len);
-		message[n-1]=0;
+	    len = client_len;
+	    n = recvfrom(sockfd, message, MAXLINE, 0, client, &len);
 		
-		if(n==-1) 
-		    perror("UDP reading");
-		
-		printf("received: %s from %s:%d\n", message, inet_ntoa(((sockaddr_in*)client)->sin_addr), ntohs(((sockaddr_in*)client)->sin_port));
-		//((sockaddr_in*)pcliaddr)->sin_port=htons(ntohs(((sockaddr_in*)pcliaddr)->sin_port)+1);
-		if((n=sendto(sockfd, message, n, 0, client, len))==-1)
-			perror("sendto");
-		printf("sent:%d bytes %s to %s:%d\n", n, message, inet_ntoa(((sockaddr_in*)client)->sin_addr), ntohs(((sockaddr_in*)client)->sin_port));
+	    if(n == -1) 
+		perror("UDP reading");
+
+        message [n-1] = 0;       
 	}
 }
 
@@ -80,17 +146,6 @@ void sig_child (int signo) {
     return;
 }
 
-static int
-callback (void *NotUsed, int argc, char **argv, char **azColName) {
-    int i;
-
-    for (i = 0; i < argc; i++) {
-        printf ("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-    }
-
-    printf("\n");
-    return 0;
-}
 
 // sets up sqlite database for storing gossip
 int setup_database (sqlite3 *db, int &rc, char *filePath) {
@@ -121,11 +176,9 @@ int setup_database (sqlite3 *db, int &rc, char *filePath) {
                 
                 "DROP TABLE IF EXISTS GOSSIP;" \
                 "CREATE TABLE GOSSIP(" \
-                "PEER       TEXT NOT NULL," \
-                "MESSAGE    TEXT," \
-                "ENCRYPTION TEXT NOT NULL," \
-                "DATE       TEXT NOT NULL," \
-                "FOREIGN KEY (PEER) REFERENCES PEERS(PEER));";
+                "DIGEST PRIMARY KEY TEXT NOT NULL," \
+                "MESSAGE            TEXT," \
+                "DATE               TEXT NOT NULL);";
 
 
     char *zErrMsg = 0;
@@ -161,7 +214,7 @@ int main (int argc, char *argv[]) {
     
     printf ("\nfilepath: %s port: %d\n", filePath, port);
     
-    // database 
+    // database for storing peers and messages 
     sqlite3 *db;
     int rc;
     
@@ -257,7 +310,7 @@ int main (int argc, char *argv[]) {
     FD_ZERO(&rset);
     
     // keep track of the biggest file descriptor for the select statement
-    maxfdp1 = std::max (tcpfd, udpfd) + 1;
+    maxfdp1 = max (tcpfd, udpfd) + 1;
 
     for ( ; ; ) {
         FD_SET (tcpfd, &rset);
@@ -290,8 +343,7 @@ int main (int argc, char *argv[]) {
 
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
-            printf("udp works\n");
-            //udp_echo (confd, client, client_len);
+            udp_handler (confd, (sockaddr*) &client, client_len, db, rc);
             recv_len = recvfrom(udpfd, message, MAXLINE, 0, 
                     (struct sockaddr*)&client, &client_len);
 
