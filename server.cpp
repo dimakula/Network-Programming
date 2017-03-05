@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include <string> // for string
+//#include <string> // for string
 #include <string.h> // for strlen
 #include <strings.h> // for bzero
 #include <unistd.h>
@@ -58,8 +58,8 @@ void sig_child (int signo) {
 int main (int argc, char *argv[]) {
     
     char c;
-    std::string filePath;
-    short int port;
+    char* filePath;
+    unsigned short int port;
 
     while ((c=getopt(argc, argv, "d:p:"))!=-1) {
         switch (c) {
@@ -72,11 +72,13 @@ int main (int argc, char *argv[]) {
         }
     }
     
+    printf ("\nfilepath: %s port: %d\n", filePath, port);
+    
     // tcp, udp and connection file descriptors
     int tcpfd, udpfd, confd;
     int maxfdp1, nready;
     int msgLength;
-    fd_set rset;
+    fd_set rset; // check which file descriptor is set
     char message[MAXLINE];
     pid_t child;
     struct sockaddr_in client, server;
@@ -91,64 +93,62 @@ int main (int argc, char *argv[]) {
     int childpid;
     void sig_child (int);
     
+    struct timeval timeout; // timeout for selecting between file descriptors
+    timeout.tv_sec = 60;
+    timeout.tv_usec = 0;
+    
 
     // optional value for Setsockopt
     const int on = 1;
     
     // create listening TCP socket
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror ("TCP Socket error");
+        perror ("TCP socket");
         exit (1);
     }
 
-    // clear the server address, just in case
+    // clear the server structure, just in case
     bzero(&server, addr_len);
 
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = htonl(INADDR_ANY);
     server.sin_port = htons (port);
     
-    // get the port number for the tcp connection
-    if (getsockname(tcpfd, (struct sockaddr*) &server, &addr_len) == -1)
-        perror ("get sock name error");
+    // checking everything converted properly
+    tcpPort = ntohs(server.sin_port);
+    printf("Binding tcp connection to port %d\n", tcpPort);
 
-    else {
-        tcpPort = ntohs(server.sin_port);
-        printf("Binding tcp connection to port %d\n", tcpPort);
-    }  
+    // SO_REUSEADDR allows multiple sockets to listen in on the port
+    if (setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)) < 0)
+        perror ("TCP options");
 
-    setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)); 
-
-    
-    if (bind (tcpfd, (struct sockaddr*) &server, addr_len) < 0)
-        perror ("");
+    if (bind (tcpfd, (struct sockaddr*) &server, addr_len) < 0) {
+        perror ("TCP binding");
+        close (tcpfd);
+        exit(-1);  
+    }
 
     if (listen(tcpfd, MAX_CALLS) < 0)
         perror ("");
 
     //Build UDP socket 
     udpfd = socket(AF_INET, SOCK_DGRAM, 0);   
-    
+
     if(udpfd < 0)  
     {  
-        perror("socket");  
+        perror("UDP socket");  
         exit(-1);  
     }  
           
     //Config network
     bzero(&server, sizeof(server));   // Clear.
     server.sin_family = AF_INET;       // IPv4.  
-    server.sin_port   = htons(udpPort);   // port.  
+    server.sin_port   = htons(port);   // port.  
     server.sin_addr.s_addr = htonl(INADDR_ANY); // ip.  
     
-    // get udp port
-    if (getsockname(udpfd, (struct sockaddr*) &server, &addr_len) == -1)
-        perror ("get sock name error");
-
-    else {
-        udpPort = ntohs(server.sin_port);
-        printf("Binding udp connection to port %d\n", udpPort);
-    }
+    // checking that the port converted properly
+    udpPort = ntohs(server.sin_port);
+    printf("Binding udp connection to port %d\n", udpPort);
           
     //Bind socket.
     int err_log = bind(udpfd, (struct sockaddr*) &server, sizeof(server));  
@@ -169,12 +169,14 @@ int main (int argc, char *argv[]) {
         FD_SET (tcpfd, &rset);
         FD_SET (udpfd, &rset);
         
-        if ((nready = select (maxfdp1, &rset, NULL, NULL, NULL)) < 0) {
+        if ((nready = select (maxfdp1, &rset, NULL, NULL, &timeout)) < 0) {
             if (errno == EINTR)
                 continue;
             else 
-                perror("");
+                perror("Select");
         }
+        
+        printf ("past the select!");
         
         // if a tcp connection is requested
         if (FD_ISSET(tcpfd, &rset)) {
@@ -194,7 +196,7 @@ int main (int argc, char *argv[]) {
 
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
-            
+            printf("udp works\n");
             //udp_echo (confd, client, client_len);
             recv_len = recvfrom(udpfd, message, MAXLINE, 0, 
                     (struct sockaddr*)&client, &client_len);
