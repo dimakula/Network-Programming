@@ -125,7 +125,7 @@ int setup_database (sqlite3 *db, int &rc, char *filePath) {
                 "MESSAGE    TEXT," \
                 "ENCRYPTION TEXT NOT NULL," \
                 "DATE       TEXT NOT NULL," \
-                "FOREIGN KEY (PEER) REFERENCES PEERS(PEER),";
+                "FOREIGN KEY (PEER) REFERENCES PEERS(PEER));";
 
 
     char *zErrMsg = 0;
