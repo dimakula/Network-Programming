@@ -1,30 +1,8 @@
-#include <stdlib.h>
-#include <string.h> // for strlen
-#include <strings.h> // for bzero
-#include <unistd.h>
-#include <algorithm>
-#include <sys/wait.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <errno.h>
-#include <sqlite3.h>
-#include <stdio.h>
-#include <iostream>
-#include <sstream>
-
+#include "server.h"
 using namespace std;
 
 #define MAX_CALLS 5
 #define MAXLINE 512
-
-// Forwarded subroutines.
-void gossipBroadcast( sqlite3* );
-void gossipCallback(void , int, char, char);
-void sendUDP( string, string, int );
-void sendTCP( string, string, int );
 
 // get path separator for the specific os
 const char PathSeparator =
@@ -55,11 +33,16 @@ void signal_stop (int a) {
 }
 
 static int
-callback (void *NotUsed, int argc, char **argv, char **azColName) {
+callback (void *result, int argc, char **argv, char **azColName) {
     
     // 3 because 3 columns in the table
-    printf ("PEERS|%d|", argc / 3);
+    string peerNum = to_string(argc / 3);
+    
     char output [MAXLINE];
+    strcat (output, "PEERS|");
+    strcat (output, peerNum.c_str());
+    strcat (output, "|");
+    
     int i;
     for (i = 0; i < argc; i++) {
         
@@ -69,36 +52,35 @@ callback (void *NotUsed, int argc, char **argv, char **azColName) {
         else if (strcmp (azColName[i], "IP"))
             strcat (output, "IP=");
             
-        strcat (output, argv[i] ? argv[i] : "NULL");
+        strcat (output, argv[i]);
+        strcat (output, ":");
     }
 
-    printf("%s\n", output);
+    strcat (output, "\n");
+    result = output;
     return 0;
 }
 
-static int gossipCallback(void *NotUsed, int argc, char **argv, char **azColName)
+static int gossipCallback(void *result, int argc, char **argv, char **azColName)
 {
-	int tempPort = -1;
-	string tempIP = "";
+	string tempPort;
+	string tempIP;
 
 	for( int i = 0; i < argc; i++ )
 	{
 		if( azColName[i] == "PORT")
 		{
-			stringstream(argv[i]) >> tempPort;
+			tempPort = argv[i];
 		}
 		else if(azColName[i] == "IP")
 		{
-			stringstream(argv[i]) >> tempIP;
+			tempIP = argv[i];
  		}
-
-		// If good values were obtained, fire off the message.
-		if( tempPort != -1 && tempIP != "" )
-		{
-			//TODO: Add needed logic to switch between UDP and TCP.
-			sendTCP( latestGossip, tempIP, tempPort );
-		}
+		
+		//TODO: Add needed logic to switch between UDP and TCP.
+	    //sendTCP( latestGossip, tempIP, tempPort );
 	}
+	
 	return 0;
 }
 
@@ -136,7 +118,7 @@ void broadcastGossip() {
 
 // Parses the user commands and stores them in an sqlite3
 // database
-void reader (string fulltext) {
+char *reader (string fulltext) {
   
     int rc;
     string name, port, ip;
@@ -144,6 +126,7 @@ void reader (string fulltext) {
     string sql;
     string values;
     bool broadcast = false;
+    bool peersRequest = false; // Set to true when PEERS? appears
 
 
     istringstream stream (fulltext);
@@ -189,7 +172,8 @@ void reader (string fulltext) {
         sql = "SELECT * from PEERS;";
     }
     
-    rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
+    void *result;
+    rc = sqlite3_exec(db, sql.c_str(), callback, &result, &zErrMsg);
     
     if (rc == SQLITE_CONSTRAINT_UNIQUE) {
         fprintf(stderr, "DISCARDED");
@@ -202,6 +186,9 @@ void reader (string fulltext) {
         ////////////// CALL BROADCAST CODE HERE ////////////////////////
     	broadcastGossip();
     }
+    
+    // result contains the string for PEERS? request
+    return (char *)result;
 }
 
 //handler for the tcp socket
@@ -209,16 +196,23 @@ void tcp_handler (int confd) {
   
     char buffer [MAXLINE];
     int totalRead = 0; // total number of bytes read
+    char *result; 
+    
     for( ; ;) {
         totalRead += read (confd, &buffer, MAXLINE);
         printf ("%s\n", buffer);
       
+        // if the end of the message is received
         if (buffer[totalRead - 1] == '%') {
             buffer[totalRead - 1] = '\0';
-            printf ("final buf: %s\n", buffer);
-            reader (buffer);
+            result = reader (buffer);
+            
+            if (result != NULL && result[0] != '\0') {
+                write (confd, result, strlen (result));
+            }
+                
             totalRead = 0;
-            buffer[0] = '\0'; //resets the array
+            buffer[0] = '\0'; //resets the buffer
        }
     }
 }
@@ -233,6 +227,7 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
 	socklen_t len;
 	char message [MAXLINE];
 	char *split;
+	char *result;
 	
 	for( ; ;) {
 	    len = client_len;
@@ -245,7 +240,14 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
         
         // datagram arrives in one package, so no need to check for more input
         split = strtok (message, "%\n");
-        reader (split);
+        result = reader (split);
+        printf ("%s\n", result);
+        if (result != NULL && result[0] != '\0') {
+
+            if((n=sendto(sockfd, result, n, 0, client, strlen(result)))==-1)
+			    perror("sendto");
+			  
+        }
 	}
 }
 
@@ -270,14 +272,12 @@ void setup_database (char *filePath) {
         exit(1);
     }
     
-    char *sql = "DROP TABLE IF EXISTS PEERS;" \
-                "CREATE TABLE PEERS(" \
+    char *sql = "CREATE TABLE IF NOT EXISTS PEERS(" \
                 "PEER TEXT PRIMARY  KEY   NOT NULL,"  \
                 "PORT               INT   NOT NULL,"  \
                 "IP                 TEXT  NOT NULL);" \
                 
-                "DROP TABLE IF EXISTS GOSSIP;" \
-                "CREATE TABLE GOSSIP(" \
+                "CREATE TABLE IF NOT EXISTS GOSSIP(" \
                 "DIGEST TEXT PRIMARY KEY NOT NULL," \
                 "MESSAGE             TEXT," \
                 "GENERATED           TEXT NOT NULL);";
