@@ -31,12 +31,16 @@ const char PathSeparator =
 // tcp, udp and connection file descriptors
 int tcpfd, udpfd, confd;
 
+// sqlite database
+sqlite3 *db;
+
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
     printf ("\nCancelling server, closing all file handlers\n");
     close (tcpfd);
     close (udpfd);
     close (confd);
+    sqlite3_close (db);
     fflush (stdout);
     exit (1);
 }
@@ -65,7 +69,7 @@ callback (void *NotUsed, int argc, char **argv, char **azColName) {
 
 // Parses the user commands and stores them in an sqlite3
 // database
-void reader (string fulltext, sqlite3 *db) {
+void reader (string fulltext) {
   
     int rc;
     string name, port, ip;
@@ -130,16 +134,29 @@ void reader (string fulltext, sqlite3 *db) {
     }
 }
 
-
-void tcp_handler (int sockfd) {
-
+//handler for the tcp socket
+void tcp_handler (int confd) {
+  
+    char buffer [MAXLINE];
+    int totalRead = 0; // total number of bytes read
+    for( ; ;) {
+        totalRead += read (confd, &buffer, MAXLINE);
+        printf ("%s\n", buffer);
+      
+        if (buffer[totalRead - 1] == '%') {
+            buffer[totalRead - 1] = '\0';
+            printf ("final buf: %s\n", buffer);
+            reader (buffer);
+            totalRead = 0;
+            buffer[0] = '\0'; //resets the array
+       }
+    }
 }
 
 
 // handler for the udp socket
 void
-udp_handler (int sockfd, sockaddr *client, socklen_t client_len,
-        sqlite3 *db) {
+udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
 	
 	int rc;
     int n;
@@ -158,21 +175,11 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len,
         
         // datagram arrives in one package, so no need to check for more input
         split = strtok (message, "%\n");
-        reader (split, db);
+        reader (split);
 	}
 }
 
-
-void hallo (int sockfd) {
-
-  char buf [MAXLINE];
-  write (sockfd, "Hello!\n", strlen("Hello!\n"));
-  for(int i=0;i<3;i++) {
-      int msglen=read (sockfd, &buf, MAXLINE);
-      write(sockfd, &buf, msglen);
-  }
-}
-
+// run when child is created
 void sig_child (int signo) {
     pid_t pid;
     int stat;
@@ -184,23 +191,13 @@ void sig_child (int signo) {
 
 
 // sets up sqlite database for storing gossip
-sqlite3 *setup_database (char *filePath) {
-    /*const char* dbName = "gossip.db";
-    int length = strlen (filePath) + strlen (dbName);
-    
-    
-    
-    filePath = filePath[strlen (filePath) - 1] == PathSeparator ?
-        strncat (filePath, dbName, length) :
-        strncat (filePath, PathSeparator + dbName, length);
+void setup_database (char *filePath) {
 
-    printf("%s\n", filePath);*/
-    sqlite3 *db;
     int rc = sqlite3_open(filePath, &db);
     
     if (rc) {
         fprintf (stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        return NULL;
+        exit(1);
     }
     
     char *sql = "DROP TABLE IF EXISTS PEERS;" \
@@ -223,10 +220,7 @@ sqlite3 *setup_database (char *filePath) {
     if (rc != SQLITE_OK) {
         fprintf (stderr, "SQL error: %s\n", zErrMsg);
         sqlite3_free (zErrMsg);
-    }
-
-    return db;
-    
+    }  
 }
 
 
@@ -252,7 +246,7 @@ int main (int argc, char *argv[]) {
     printf ("\nfilepath: %s port: %d\n", filePath, port);
     
     // database for storing peers and messages 
-    sqlite3 *db = setup_database (filePath);
+    setup_database (filePath);
     
     int maxfdp1, nready;
     int msgLength;
@@ -362,11 +356,9 @@ int main (int argc, char *argv[]) {
             confd = accept (tcpfd, (struct sockaddr*) &client, 
                     &client_len);
 
-            // if child process
-            if ((childpid = fork()) == 0) {
-                hallo (confd);
+            if ((childpid = fork()) == 0) {;
                 close (tcpfd);
-                //str_echo (confd); // process the request
+                tcp_handler (confd);
                 exit (0);
             }
 
@@ -375,10 +367,12 @@ int main (int argc, char *argv[]) {
 
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
-            printf ("%s\n", db);
             udp_handler (udpfd, (sockaddr*) &client, 
-                client_len, db);         
+                client_len);  
+            close (udpfd);       
         }
     }
+    
+    sqlite3_close(db);
 }
 
