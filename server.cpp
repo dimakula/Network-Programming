@@ -20,6 +20,12 @@ using namespace std;
 #define MAX_CALLS 5
 #define MAXLINE 512
 
+// Forwarded subroutines.
+void gossipBroadcast( sqlite3* );
+void gossipCallback(void , int, char, char);
+void sendUDP( string, string, int );
+void sendTCP( string, string, int );
+
 // get path separator for the specific os
 const char PathSeparator =
     #ifdef _WIN32
@@ -33,6 +39,9 @@ int tcpfd, udpfd, confd;
 
 // sqlite database
 sqlite3 *db;
+
+// Holds the latest gossip message.
+string latestGossip;
 
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
@@ -67,6 +76,64 @@ callback (void *NotUsed, int argc, char **argv, char **azColName) {
     return 0;
 }
 
+static int gossipCallback(void *NotUsed, int argc, char **argv, char **azColName)
+{
+	int tempPort = -1;
+	string tempIP = "";
+
+	for( int i = 0; i < argc; i++ )
+	{
+		if( azColName[i] == "PORT")
+		{
+			stringstream(argv[i]) >> tempPort;
+		}
+		else if(azColName[i] == "IP")
+		{
+			stringstream(argv[i]) >> tempIP;
+ 		}
+
+		// If good values were obtained, fire off the message.
+		if( tempPort != -1 && tempIP != "" )
+		{
+			//TODO: Add needed logic to switch between UDP and TCP.
+			sendTCP( latestGossip, tempIP, tempPort );
+		}
+	}
+	return 0;
+}
+
+void sendUDP(string message, string address, int port)
+{
+
+	return;
+}
+
+void sendTCP(string message, string address, int port)
+{
+
+	return;
+}
+
+void broadcastGossip() {
+
+	string sql;
+	int rc;
+	sql = "SELECT (IP, PORT) FROM PEERS";
+
+	// Storage for error code.
+	char* zErrMsg = new char();
+	(*zErrMsg) = 0;
+
+	rc = sqlite3_exec(db, sql.c_str(), gossipCallback, 0, &zErrMsg);
+
+	if (rc != SQLITE_OK) {
+		fprintf(stderr, "SQL error: %s\n", zErrMsg);
+		sqlite3_free (zErrMsg);
+	}
+
+	return;
+}
+
 // Parses the user commands and stores them in an sqlite3
 // database
 void reader (string fulltext) {
@@ -77,6 +144,7 @@ void reader (string fulltext) {
     string sql;
     string values;
     bool broadcast = false;
+
 
     istringstream stream (fulltext);
     string split;
@@ -97,6 +165,7 @@ void reader (string fulltext) {
               "VALUES (" + values + ");";
         
         broadcast = true;
+        latestGossip = message;
     
     } else if (split == "PEER") {
         getline (stream, name, ':');
@@ -131,6 +200,7 @@ void reader (string fulltext) {
        
     } else if (broadcast) {
         ////////////// CALL BROADCAST CODE HERE ////////////////////////
+    	broadcastGossip();
     }
 }
 
