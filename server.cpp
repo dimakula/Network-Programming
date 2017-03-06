@@ -2,7 +2,7 @@
 using namespace std;
 
 #define MAX_CALLS 5
-#define MAXLINE 512
+#define MAXLINE 128
 
 // get path separator for the specific os
 const char PathSeparator =
@@ -38,8 +38,10 @@ callback (void *result, int argc, char **argv, char **azColName) {
     // 3 because 3 columns in the table
     string peerNum = to_string(argc / 3);
     
-    char output [MAXLINE];
-    strcat (output, "PEERS|");
+    char *output = new char [MAXLINE];
+    strcat (output, "|PEERS:");
+    printf ("here\n");
+
     strcat (output, peerNum.c_str());
     strcat (output, "|");
     
@@ -186,7 +188,7 @@ char *reader (string fulltext) {
         ////////////// CALL BROADCAST CODE HERE ////////////////////////
     	broadcastGossip();
     }
-    
+
     // result contains the string for PEERS? request
     return (char *)result;
 }
@@ -194,7 +196,7 @@ char *reader (string fulltext) {
 //handler for the tcp socket
 void tcp_handler (int confd) {
   
-    char buffer [MAXLINE];
+    char buffer [MAXLINE] = "\0";
     int totalRead = 0; // total number of bytes read
     char *result; 
     
