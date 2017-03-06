@@ -120,7 +120,7 @@ void broadcastGossip() {
 
 // Parses the user commands and stores them in an sqlite3
 // database
-char *reader (string fulltext) {
+char *reader (string fulltext){
   
     int rc;
     string name, port, ip;
@@ -134,7 +134,12 @@ char *reader (string fulltext) {
     istringstream stream (fulltext);
     string split;
     
-    char *zErrMsg = 0;
+    // Buffer for error handling.
+    char** zErrMsg = new char*[512];
+    for(int i = 0; i < 512; ++i)
+    {
+    	zErrMsg[i] = new char[512];
+    }
     
     getline (stream, split, ':');
     
@@ -174,8 +179,10 @@ char *reader (string fulltext) {
         sql = "SELECT * from PEERS;";
     }
     
-    void *result;
-    rc = sqlite3_exec(db, sql.c_str(), callback, &result, &zErrMsg);
+    // Buffer for error handling.
+    void* result = new char[512];
+
+    rc = sqlite3_exec(db, sql.c_str(), callback, result, zErrMsg);
     
     if (rc == SQLITE_CONSTRAINT_UNIQUE) {
         fprintf(stderr, "DISCARDED");

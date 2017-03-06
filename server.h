@@ -35,7 +35,7 @@ void broadcastGossip();
 
 // Parses the user commands and stores them in an sqlite3
 // database
-void reader (std::string);
+char* reader (std::string);
 
 //handler for the tcp socket
 void tcp_handler (int);
