@@ -23,7 +23,7 @@ string latestGossip;
 
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
-    printf ("\nCancelling server, closing all file handlers\n");
+    fprintf (stderr, "\nCancelling server, closing all file handlers\n");
     close (tcpfd);
     close (udpfd);
     close (confd);
@@ -37,29 +37,25 @@ callback (void *result, int argc, char **argv, char **azColName) {
     
     // 3 because 3 columns in the table
     string peerNum = to_string(argc / 3);
-    
-    char *output = new char [MAXLINE];
-    strcat (output, "|PEERS:");
-    printf ("here\n");
+    strncat ((char *)result, "|PEERS:", 7);
 
-    strcat (output, peerNum.c_str());
-    strcat (output, "|");
+    strncat ((char *)result, peerNum.c_str(), strlen (peerNum.c_str()));
+    strncat ((char *)result, "|", 1);
     
     int i;
-    for (i = 0; i < argc; i++) {
+    for (i = 0; i < argc; i+=3) {
         
-        if (strcmp (azColName[i], "PORT"))
-            strcat (output, "PORT=");
-        
-        else if (strcmp (azColName[i], "IP"))
-            strcat (output, "IP=");
-            
-        strcat (output, argv[i]);
-        strcat (output, ":");
+        strncat ((char *)result, argv[i], strlen (argv[i]));
+        strncat ((char *)result, ":", 1);
+        strncat ((char *)result, "PORT=", 5);
+        strncat ((char *)result, argv[i+1], strlen (argv[i+1]));
+        strncat ((char *)result, ":", 1);
+        strncat ((char *)result, "IP=", 3);
+        strncat ((char *)result, argv[i+2], strlen (argv[i+2]));
+        strncat ((char *)result, "|", 1);   
     }
 
-    strcat (output, "\n");
-    result = output;
+    strncat ((char *)result, "\n", 1);
     return 0;
 }
 
@@ -120,7 +116,7 @@ void broadcastGossip() {
 
 // Parses the user commands and stores them in an sqlite3
 // database
-char *reader (string fulltext){
+char *reader (string fulltext) {
   
     int rc;
     string name, port, ip;
@@ -179,7 +175,6 @@ char *reader (string fulltext){
         sql = "SELECT * from PEERS;";
     }
     
-    // Buffer for error handling.
     void* result = new char[512];
 
     rc = sqlite3_exec(db, sql.c_str(), callback, result, zErrMsg);
@@ -215,6 +210,7 @@ void tcp_handler (int confd) {
         if (buffer[totalRead - 1] == '%') {
             buffer[totalRead - 1] = '\0';
             result = reader (buffer);
+            printf("%s\n", result);
             
             if (result != NULL && result[0] != '\0') {
                 write (confd, result, strlen (result));
@@ -247,15 +243,17 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
 
         message [n-1] = 0;
         
+        printf ("UDP: %s\n", message);
+        
         // datagram arrives in one package, so no need to check for more input
         split = strtok (message, "%\n");
         result = reader (split);
-        printf ("%s\n", result);
+        printf ("Result: %s\n", result);
         if (result != NULL && result[0] != '\0') {
 
-            if((n=sendto(sockfd, result, n, 0, client, strlen(result)))==-1)
-			    perror("sendto");
-			  
+            
+            if((n=sendto(sockfd, result, strlen(result), 0, client, client_len))==-1)
+			    perror("sendto");		  
         }
 	}
 }
