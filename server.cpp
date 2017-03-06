@@ -44,6 +44,7 @@ void signal_stop (int a) {
 static int
 callback (void *NotUsed, int argc, char **argv, char **azColName) {
     
+    // 3 because 3 columns in the table
     printf ("PEERS|%d|", argc / 3);
     char output [MAXLINE];
     int i;
@@ -62,8 +63,11 @@ callback (void *NotUsed, int argc, char **argv, char **azColName) {
     return 0;
 }
 
-void reader (string fulltext, sqlite3 *db, int &rc) {
+// Parses the user commands and stores them in an sqlite3
+// database
+void reader (string fulltext, sqlite3 *db) {
   
+    int rc;
     string name, port, ip;
     string digest, message, date;
     string sql;
@@ -104,7 +108,6 @@ void reader (string fulltext, sqlite3 *db, int &rc) {
         }
         
         values = "\'" + name + "\', " + port + ", \'" + ip + "\'";
-        printf ("%s\n", values);
         
         sql = "INSERT OR REPLACE INTO PEERS (PEER, PORT, IP)" \
               "VALUES (" + values + ");";
@@ -112,8 +115,6 @@ void reader (string fulltext, sqlite3 *db, int &rc) {
     } else if (split == "PEERS?") {
         sql = "SELECT * from PEERS;";
     }
-
-    printf ("%s\n", sql.c_str());
     
     rc = sqlite3_exec(db, sql.c_str(), callback, 0, &zErrMsg);
     
@@ -129,10 +130,18 @@ void reader (string fulltext, sqlite3 *db, int &rc) {
     }
 }
 
+
+void tcp_handler (int sockfd) {
+
+}
+
+
+// handler for the udp socket
 void
-udp_handler(int sockfd, sockaddr *client, socklen_t client_len,
-        sqlite3 *db, int &rc) {
+udp_handler (int sockfd, sockaddr *client, socklen_t client_len,
+        sqlite3 *db) {
 	
+	int rc;
     int n;
 	socklen_t len;
 	char message [MAXLINE];
@@ -149,7 +158,7 @@ udp_handler(int sockfd, sockaddr *client, socklen_t client_len,
         
         // datagram arrives in one package, so no need to check for more input
         split = strtok (message, "%\n");
-        reader (split, db, rc);
+        reader (split, db);
 	}
 }
 
@@ -175,7 +184,7 @@ void sig_child (int signo) {
 
 
 // sets up sqlite database for storing gossip
-sqlite3 *setup_database (int &rc, char *filePath) {
+sqlite3 *setup_database (char *filePath) {
     /*const char* dbName = "gossip.db";
     int length = strlen (filePath) + strlen (dbName);
     
@@ -187,7 +196,7 @@ sqlite3 *setup_database (int &rc, char *filePath) {
 
     printf("%s\n", filePath);*/
     sqlite3 *db;
-    rc = sqlite3_open(filePath, &db);
+    int rc = sqlite3_open(filePath, &db);
     
     if (rc) {
         fprintf (stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
@@ -243,8 +252,7 @@ int main (int argc, char *argv[]) {
     printf ("\nfilepath: %s port: %d\n", filePath, port);
     
     // database for storing peers and messages 
-    int rc;
-    sqlite3 *db = setup_database (rc, filePath);
+    sqlite3 *db = setup_database (filePath);
     
     int maxfdp1, nready;
     int msgLength;
@@ -369,7 +377,7 @@ int main (int argc, char *argv[]) {
         if (FD_ISSET (udpfd, &rset)) {
             printf ("%s\n", db);
             udp_handler (udpfd, (sockaddr*) &client, 
-                client_len, db, rc);         
+                client_len, db);         
         }
     }
 }
