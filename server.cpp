@@ -53,52 +53,69 @@ callback (void *result, int argc, char **argv, char **azColName) {
     return 0;
 }
 
-static int gossipCallback(void *result, int argc, char **argv, char **azColName)
+static int gossipCallback(void *message, int argc, char **argv, 
+    char **azColName)
 {
-	string tempPort;
-	string tempIP;
+	char *tempPort;
+	char *tempIP;
+	int i = 0;
+    tempIP = argv[i];
+	tempPort = argv[i+1];
 
-	for( int i = 0; i < argc; i++ )
-	{
-		if( azColName[i] == "PORT")
-		{
-			tempPort = argv[i];
-		}
-		else if(azColName[i] == "IP")
-		{
-			tempIP = argv[i];
- 		}
-		
-		//TODO: Add needed logic to switch between UDP and TCP.
-	    //sendTCP( latestGossip, tempIP, tempPort );
-	}
-	
+	sendUDP (message, tempIP, tempPort);
+	sendTCP (message, tempIP, tempPort);
 	return 0;
 }
 
-void sendUDP(string message, string address, int port)
+void sendUDP(char *message, char *address, char *port)
+{
+    int  sockfd, num;  
+    char  buf[MAXLINE];  
+	struct sockaddr_in peer;
+	int portnum = atoi (port);  
+
+      		    
+	if((sockfd = socket(AF_INET, SOCK_STREAM, 0))==-1) {  
+        perror ("Socket:");
+		return;    
+	}
+		
+	// set socket to non-blocking: if the client ain't listening,
+	// then they won't get the message
+	fcntl (sockfd, F_SETFL, O_NONBLOCK);
+		    
+	bzero(&peer, sizeof(peer));
+	peer.sin_family= AF_INET;  
+	peer.sin_port = htons(portnum);  
+	inet_pton(AF_INET, address, peer.sin_addr);
+		
+		
+	for ( ; ;) {
+	    if (sendto (sockfd, message, sizeof(message), 0,
+		    (struct sockaddr *) &peer, sizeof(peer)) < 0) {
+		    perror ("sendto");
+
+		}
+	}
+}
+
+void sendTCP(char *message, string address, int port)
 {
 
 	return;
 }
 
-void sendTCP(string message, string address, int port)
-{
-
-	return;
-}
-
-void broadcastGossip() {
+void broadcastGossip(char *message) {
 
 	string sql;
 	int rc;
-	sql = "SELECT (IP, PORT) FROM PEERS";
+	sql = "SELECT IP, PORT FROM PEERS";
 
 	// Storage for error code.
 	char* zErrMsg = new char();
 	(*zErrMsg) = 0;
 
-	rc = sqlite3_exec(db, sql.c_str(), gossipCallback, 0, &zErrMsg);
+	rc = sqlite3_exec(db, sql.c_str(), gossipCallback, message, &zErrMsg);
 
 	if (rc != SQLITE_OK) {
 		fprintf(stderr, "SQL error: %s\n", zErrMsg);
@@ -142,7 +159,6 @@ char *reader (string fulltext) {
               "VALUES (" + values + ");";
         
         broadcast = true;
-        latestGossip = message;
     
     } else if (split == "PEER") {
         getline (stream, name, ':');
@@ -191,8 +207,7 @@ char *reader (string fulltext) {
         sqlite3_free(zErrMsg);
        
     } else if (broadcast) {
-        ////////////// CALL BROADCAST CODE HERE ////////////////////////
-    	broadcastGossip();
+    	broadcastGossip(message.c_str());
     }
 
     delete[] result; //free up heap
@@ -263,6 +278,8 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
 			    perror("sendto");		  
         }
 	}
+	
+	delete []result;
 }
 
 // run when child is created
@@ -397,7 +414,7 @@ int main (int argc, char *argv[]) {
     }  
           
     //Config network
-    bzero(&server, sizeof(server));   // Clear.
+    bzero(&server, sizeof(server));    // Clear.
     server.sin_family = AF_INET;       // IPv4.  
     server.sin_port   = htons(port);   // port.  
     server.sin_addr.s_addr = htonl(INADDR_ANY); // ip.  

@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <iostream>
 #include <sstream>
+#include<netdb.h>
+#include <fcntl.h>
 
 ///////////////////////////
 // Forwarded Subroutines //
@@ -23,7 +25,7 @@ void gossipBroadcast();
 
 void gossipCallback(void* , int, char, char);
 
-void sendUDP( std::string, std::string, int );
+void sendUDP( char *, char *, int );
 
 void sendTCP( std::string, std::string, int );
 
@@ -31,7 +33,7 @@ void signal_stop (int);void sendUDP(std::string, std::string, int);
 
 void sendTCP(std::string, std::string, int);
 
-void broadcastGossip();
+void broadcastGossip(char *);
 
 // Parses the user commands and stores them in an sqlite3
 // database
