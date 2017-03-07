@@ -88,13 +88,23 @@ void sendUDP(char *message, char *address, char *port)
 	peer.sin_family= AF_INET;  
 	peer.sin_port = htons(portnum);  
 	inet_pton(AF_INET, address, &(peer.sin_addr));
+	
+	fd_set rset;
+	int nready;
 		
-		
-	for ( ; ;) {
-	    if (sendto (sockfd, message, sizeof(message), 0,
-		    (struct sockaddr *) &peer, sizeof(peer)) < 0) {
-		    perror ("sendto");
+	FD_ZERO (&rset);
+	FD_SET (sockfd, &rset);
+        
+    if ((nready = select (sockfd + 1, &rset, NULL, NULL, 0)) < 0) {
 
+		if (FD_ISSET(sockfd, &rset)) {
+	        for ( ; ;) {
+	            printf ("Blocking\n");
+	            if (sendto (sockfd, message, sizeof(message), 0,
+		            (struct sockaddr *) &peer, sizeof(peer)) < 0) {
+		            perror ("sendto");
+		        }
+		    }
 		}
 	}
 }
@@ -233,9 +243,8 @@ void tcp_handler (int confd) {
             printf ("TCP: %s\n", buffer);
             input = strtok (buffer, "%\n");
             result = reader (input);
-            printf("Result: %s\n", result);
             
-            if (result != NULL && result[0] != '\0') {
+            if (peers > 0) {
                 write (confd, result, strlen (result));
             }
                 
@@ -271,8 +280,9 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
         split = strtok (message, "%\n");
         result = reader (split);
         printf ("Result: %s\n", result);
-        if (result != NULL && result[0] != '\0') {
-    
+        
+        // if there is a peers list that needs to be returned
+        if (peers != 0) {   
             // sends 
             if((n=sendto(sockfd, result, strlen(result), 0, client, client_len))==-1)
 			    perror("sendto");		  
