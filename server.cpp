@@ -62,8 +62,8 @@ static int gossipCallback(void *message, int argc, char **argv,
     tempIP = argv[i];
 	tempPort = argv[i+1];
 
-	sendUDP (message, tempIP, tempPort);
-	sendTCP (message, tempIP, tempPort);
+	sendUDP ((char *) message, tempIP, tempPort);
+	//sendTCP (message, tempIP, tempPort);
 	return 0;
 }
 

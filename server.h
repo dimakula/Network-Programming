@@ -25,7 +25,7 @@ void gossipBroadcast();
 
 void gossipCallback(void* , int, char, char);
 
-void sendUDP( char *, char *, int );
+void sendUDP( char *, char *, char * );
 
 void sendTCP( std::string, std::string, int );
 
