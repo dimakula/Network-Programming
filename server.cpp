@@ -87,7 +87,7 @@ void sendUDP(char *message, char *address, char *port)
 	bzero(&peer, sizeof(peer));
 	peer.sin_family= AF_INET;  
 	peer.sin_port = htons(portnum);  
-	inet_pton(AF_INET, address, peer.sin_addr);
+	inet_pton(AF_INET, address, &(peer.sin_addr));
 		
 		
 	for ( ; ;) {
@@ -207,7 +207,7 @@ char *reader (string fulltext) {
         sqlite3_free(zErrMsg);
        
     } else if (broadcast) {
-    	broadcastGossip(message.c_str());
+    	broadcastGossip((char *)message.c_str());
     }
 
     delete[] result; //free up heap
