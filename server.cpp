@@ -63,7 +63,7 @@ static int gossipCallback(void *message, int argc, char **argv,
 	tempPort = argv[i+1];
 
 	sendUDP ((char *) message, tempIP, tempPort);
-	//sendTCP (message, tempIP, tempPort);
+	sendTCP ((char *) message, tempIP, tempPort);
 	return 0;
 }
 
@@ -75,7 +75,7 @@ void sendUDP(char *message, char *address, char *port)
 	int portnum = atoi (port);  
 
       		    
-	if((sockfd = socket(AF_INET, SOCK_DATAGRAM, 0))==-1) {  
+	if((sockfd = socket(AF_INET, SOCK_DGRAM, 0))==-1) {  
         perror ("Socket:");
 		return;    
 	}
@@ -94,9 +94,13 @@ void sendUDP(char *message, char *address, char *port)
 		
 	FD_ZERO (&rset);
 	FD_SET (sockfd, &rset);
-        
-    if ((nready = select (sockfd + 1, &rset, NULL, NULL, 0)) < 0) {
+     
+     printf ("before\n");  
+    
+    // select on write flag
+    if ((nready = select (sockfd + 1, NULL, &rset, NULL, 0)) < 0) {
 
+        printf ("selection");
 		if (FD_ISSET(sockfd, &rset)) {
 	        for ( ; ;) {
 	            printf ("Blocking\n");
@@ -107,6 +111,8 @@ void sendUDP(char *message, char *address, char *port)
 		    }
 		}
 	}
+	
+	printf ("after");
 }
 
 void sendTCP(char *message, char *address, char *port)
@@ -115,23 +121,33 @@ void sendTCP(char *message, char *address, char *port)
     char  buf[MAXLINE];  
 	struct sockaddr_in peer;
 	int portnum = atoi (port);  
-      	
-    if (inet_pton (AF_INET, address, &(peer.sin_addr.s_addr) == -1)
-        perror ("inet_pton");
     	    
 	bzero (&peer, sizeof(peer));
 	peer.sin_family = AF_INET;
-	peer.sin_port = htons (port);
+	peer.sin_port = htons (portnum);
+	inet_pton (AF_INET, address, &(peer.sin_addr.s_addr)); //convert string to ip
 	
-	if (sockfd = socket (AF_INET, SOCK_STREAM, 0) {
+	if (sockfd = socket (AF_INET, SOCK_STREAM, 0))
 	    perror ("socket");
 	 
-    //Something needs to go here	 
+    if (connect (sockfd, (struct sockaddr*)&peer, sizeof (peer)) < 0)
+        perror ("connect");
+    
+    fd_set rset;
+	int nready;
+		
+	FD_ZERO (&rset);
+	FD_SET (sockfd, &rset);	 
    
-    if ((nready = select (sockfd + 1, &rset, NULL, NULL, 0)) < 0) {
+    if ((nready = select (sockfd + 1, NULL, &rset, NULL, 0)) < 0) {
 
+        int totalWrite = 0;
+        
 		if (FD_ISSET(sockfd, &rset)) {
-            // send stuff here
+            
+            while (totalWrite < strlen (message)) {
+                totalWrite += write (sockfd, message, strlen (message));
+            }
 		}
 	}
 }
@@ -266,7 +282,10 @@ void tcp_handler (int confd) {
             result = reader (input);
             
             if (peers > 0) {
-                write (confd, result, strlen (result));
+                
+                while (totalWrite < strlen (result)) { 
+                    totalWrite += write (confd, result, strlen (result));
+                }
             }
                 
             totalRead = 0;
@@ -303,7 +322,7 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
         printf ("Result: %s\n", result);
         
         // if there is a peers list that needs to be returned
-        if (peers != 0) {   
+        if (peers != 0) {
             // sends 
             if((n=sendto(sockfd, result, strlen(result), 0, client, client_len))==-1)
 			    perror("sendto");		  
