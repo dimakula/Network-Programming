@@ -32,30 +32,24 @@ void signal_stop (int a) {
     exit (1);
 }
 
+// counts the number of peers known
+static int peers;
+
+// Called for each row of the select statement, which appends the peers
+// in the format specified
 static int
 callback (void *result, int argc, char **argv, char **azColName) {
-    
-    // 3 because 3 columns in the table
-    string peerNum = to_string(argc / 3);
-    strncat ((char *)result, "|PEERS:", 7);
-
-    strncat ((char *)result, peerNum.c_str(), strlen (peerNum.c_str()));
-    strncat ((char *)result, "|", 1);
-    
-    int i;
-    for (i = 0; i < argc; i+=3) {
-        
-        strncat ((char *)result, argv[i], strlen (argv[i]));
-        strncat ((char *)result, ":", 1);
-        strncat ((char *)result, "PORT=", 5);
-        strncat ((char *)result, argv[i+1], strlen (argv[i+1]));
-        strncat ((char *)result, ":", 1);
-        strncat ((char *)result, "IP=", 3);
-        strncat ((char *)result, argv[i+2], strlen (argv[i+2]));
-        strncat ((char *)result, "|", 1);   
-    }
-
-    strncat ((char *)result, "\n", 1);
+  
+    peers++;
+    int i = 0;
+    strncat ((char *)result, argv[i], strlen (argv[i]));
+    strncat ((char *)result, ":", 1);
+    strncat ((char *)result, "PORT=", 5);
+    strncat ((char *)result, argv[i+1], strlen (argv[i+1]));
+    strncat ((char *)result, ":", 1);
+    strncat ((char *)result, "IP=", 3);
+    strncat ((char *)result, argv[i+2], strlen (argv[i+2]));
+    strncat ((char *)result, "|", 1);   
     return 0;
 }
 
@@ -117,7 +111,7 @@ void broadcastGossip() {
 // Parses the user commands and stores them in an sqlite3
 // database
 char *reader (string fulltext) {
-  
+
     int rc;
     string name, port, ip;
     string digest, message, date;
@@ -125,17 +119,14 @@ char *reader (string fulltext) {
     string values;
     bool broadcast = false;
     bool peersRequest = false; // Set to true when PEERS? appears
+    peers = 0; // number of peers currently known
 
 
     istringstream stream (fulltext);
     string split;
     
     // Buffer for error handling.
-    char** zErrMsg = new char*[512];
-    for(int i = 0; i < 512; ++i)
-    {
-    	zErrMsg[i] = new char[512];
-    }
+    char* zErrMsg = 0;
     
     getline (stream, split, ':');
     
@@ -175,11 +166,24 @@ char *reader (string fulltext) {
         sql = "SELECT * from PEERS;";
     }
     
-    void* result = new char[512];
+    char* result = new char[512];
+    char* output = new char[512];
+    result[0] = '\0'; // because life is hard, and tears flow freely
+    output[0] = '\0';
 
-    rc = sqlite3_exec(db, sql.c_str(), callback, result, zErrMsg);
+    rc = sqlite3_exec(db, sql.c_str(), callback, result, &zErrMsg);
     
-    if (rc == SQLITE_CONSTRAINT_UNIQUE) {
+    string peerNum = to_string (peers);
+    strncat ((char *)output, "|PEERS:", 7);
+    printf ("%s", output);
+
+    strncat (output, peerNum.c_str(), strlen (peerNum.c_str()));
+    strncat (output, "|", 1);
+    strncat (output, result, strlen (result));
+    strncat (output, "\n", 1);
+    
+    // Constraint due to primary key or not null
+    if (rc == SQLITE_CONSTRAINT) {
         fprintf(stderr, "DISCARDED");
      
     } else if (rc != SQLITE_OK) {
@@ -191,26 +195,30 @@ char *reader (string fulltext) {
     	broadcastGossip();
     }
 
-    // result contains the string for PEERS? request
-    return (char *)result;
+    delete[] result; //free up heap
+    
+    // return the result of the PEERS? request, if applicable
+    return (char *)output;
 }
 
 //handler for the tcp socket
 void tcp_handler (int confd) {
   
-    char buffer [MAXLINE] = "\0";
-    int totalRead = 0; // total number of bytes read
+    char buffer [MAXLINE];
+    char *input;
+    int totalRead = 0; // total number of bytes read from client
+    int totalWrite = 0; // total bytes written to client
     char *result; 
     
     for( ; ;) {
         totalRead += read (confd, &buffer, MAXLINE);
-        printf ("%s\n", buffer);
       
         // if the end of the message is received
-        if (buffer[totalRead - 1] == '%') {
-            buffer[totalRead - 1] = '\0';
-            result = reader (buffer);
-            printf("%s\n", result);
+        if (buffer[totalRead - 1] == '%' || buffer[totalRead - 1] == '\n') {
+            printf ("TCP: %s\n", buffer);
+            input = strtok (buffer, "%\n");
+            result = reader (input);
+            printf("Result: %s\n", result);
             
             if (result != NULL && result[0] != '\0') {
                 write (confd, result, strlen (result));
@@ -226,7 +234,6 @@ void tcp_handler (int confd) {
 // handler for the udp socket
 void
 udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
-	
 	int rc;
     int n;
 	socklen_t len;
@@ -250,8 +257,8 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
         result = reader (split);
         printf ("Result: %s\n", result);
         if (result != NULL && result[0] != '\0') {
-
-            
+    
+            // sends 
             if((n=sendto(sockfd, result, strlen(result), 0, client, client_len))==-1)
 			    perror("sendto");		  
         }
@@ -430,6 +437,7 @@ int main (int argc, char *argv[]) {
         
         // if a tcp connection is requested
         if (FD_ISSET(tcpfd, &rset)) {
+            printf("TCP connection established\n");
             confd = accept (tcpfd, (struct sockaddr*) &client, 
                     &client_len);
 
@@ -444,6 +452,7 @@ int main (int argc, char *argv[]) {
 
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
+            printf("UDP connection established\n");
             udp_handler (udpfd, (sockaddr*) &client, 
                 client_len);  
             close (udpfd);       
