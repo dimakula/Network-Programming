@@ -75,7 +75,7 @@ void sendUDP(char *message, char *address, char *port)
 	int portnum = atoi (port);  
 
       		    
-	if((sockfd = socket(AF_INET, SOCK_STREAM, 0))==-1) {  
+	if((sockfd = socket(AF_INET, SOCK_DATAGRAM, 0))==-1) {  
         perror ("Socket:");
 		return;    
 	}
@@ -109,10 +109,31 @@ void sendUDP(char *message, char *address, char *port)
 	}
 }
 
-void sendTCP(char *message, string address, int port)
+void sendTCP(char *message, char *address, char *port)
 {
+    int  sockfd, num;  
+    char  buf[MAXLINE];  
+	struct sockaddr_in peer;
+	int portnum = atoi (port);  
+      	
+    if (inet_pton (AF_INET, address, &(peer.sin_addr.s_addr) == -1)
+        perror ("inet_pton");
+    	    
+	bzero (&peer, sizeof(peer));
+	peer.sin_family = AF_INET;
+	peer.sin_port = htons (port);
+	
+	if (sockfd = socket (AF_INET, SOCK_STREAM, 0) {
+	    perror ("socket");
+	 
+    //Something needs to go here	 
+   
+    if ((nready = select (sockfd + 1, &rset, NULL, NULL, 0)) < 0) {
 
-	return;
+		if (FD_ISSET(sockfd, &rset)) {
+            // send stuff here
+		}
+	}
 }
 
 void broadcastGossip(char *message) {
