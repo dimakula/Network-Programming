@@ -21,8 +21,9 @@
 #include "server.h"
 using namespace std;
 
+// the maximum number of queued connections allowed
 #define MAX_CALLS 5
-#define MAXLINE 128
+#define MAXLINE 512
 
 // get path separator for the specific os
 const char PathSeparator =
@@ -83,94 +84,58 @@ static int gossipCallback(void *message, int argc, char **argv,
 	tempPort = argv[i+1];
 
 	sendUDP ((char *) message, tempIP, tempPort);
-	sendTCP ((char *) message, tempIP, tempPort);
 	return 0;
 }
 
 void sendUDP(char *message, char *address, char *port)
 {
-    int  sockfd, num;  
+    int  sockfd, num, recieved;
+    struct addrinfo hints, *servinfo, *p;
     char  buf[MAXLINE];  
 	struct sockaddr_in peer;
-	int portnum = atoi (port);  
+	int totalSent, bytes; 
 
-      		    
-	if((sockfd = socket(AF_INET, SOCK_DGRAM, 0))==-1) {  
-        perror ("Socket:");
-		return;    
-	}
-		
-	// set socket to non-blocking: if the client ain't listening,
-	// then they won't get the message
-	fcntl (sockfd, F_SETFL, O_NONBLOCK);
-		    
-	bzero(&peer, sizeof(peer));
-	peer.sin_family= AF_INET;  
-	peer.sin_port = htons(portnum);  
-	inet_pton(AF_INET, address, &(peer.sin_addr));
-	
-	fd_set rset;
-	int nready;
-		
-	FD_ZERO (&rset);
-	FD_SET (sockfd, &rset);
-     
-     printf ("before\n");  
     
-    // select on write flag
-    if ((nready = select (sockfd + 1, NULL, &rset, NULL, 0)) < 0) {
-
-        printf ("selection");
-		if (FD_ISSET(sockfd, &rset)) {
-	        for ( ; ;) {
-	            printf ("Blocking\n");
-	            if (sendto (sockfd, message, sizeof(message), 0,
-		            (struct sockaddr *) &peer, sizeof(peer)) < 0) {
-		            perror ("sendto");
-		        }
-		    }
-		}
-	}
-	
-	printf ("after");
-}
-
-void sendTCP(char *message, char *address, char *port)
-{
-    int  sockfd, num;  
-    char  buf[MAXLINE];  
-	struct sockaddr_in peer;
-	int portnum = atoi (port);  
-    	    
-	bzero (&peer, sizeof(peer));
-	peer.sin_family = AF_INET;
-	peer.sin_port = htons (portnum);
-	inet_pton (AF_INET, address, &(peer.sin_addr.s_addr)); //convert string to ip
-	
-	if (sockfd = socket (AF_INET, SOCK_STREAM, 0))
-	    perror ("socket");
-	 
-    if (connect (sockfd, (struct sockaddr*)&peer, sizeof (peer)) < 0)
-        perror ("connect");
+    bzero (&hints, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_DGRAM;
     
-    fd_set rset;
-	int nready;
-		
-	FD_ZERO (&rset);
-	FD_SET (sockfd, &rset);	 
-   
-    if ((nready = select (sockfd + 1, NULL, &rset, NULL, 0)) < 0) {
-
-        int totalWrite = 0;
+    if ((recieved = getaddrinfo (address, port, &hints, &servinfo)) != 0) {
+        perror ("Get address info");
+        return;
+    }
+    
+    for (p = servinfo; p != NULL; p = p->ai_next) {
+        if ((sockfd = socket (p->ai_family, p->ai_socktype, p->ai_protocol))
+            == -1) {
+            perror ("sendUDP");
+            continue;
+        }
         
-		if (FD_ISSET(sockfd, &rset)) {
-            
-            while (totalWrite < strlen (message)) {
-                totalWrite += write (sockfd, message, strlen (message));
-            }
-		}
+        break;
+    }
+
+	if (p == NULL) {
+	    fprintf (stderr, "sendUDP: Failed to create socket\n");
+	    return;
 	}
+	
+	while (totalSent < strlen (message)) {
+	    
+	    if ((bytes = sendto (sockfd, message, strlen(message), 0, p->ai_addr,
+	        p->ai_addrlen)) == -1) {
+	        
+	        perror ("sendUDP send");
+	        return;
+	    }
+	    	    
+	    totalSent += bytes;
+	}
+	
+	freeaddrinfo (servinfo);
+	close (sockfd);
 }
+
 
 void broadcastGossip(char *message) {
 
@@ -287,28 +252,39 @@ char *reader (string fulltext) {
 void tcp_handler (int confd) {
   
     char buffer [MAXLINE];
-    char *input;
     int totalRead = 0; // total number of bytes read from client
     int totalWrite = 0; // total bytes written to client
     char *result; 
+    int bytes;
+    bool receiving = true;
     
-    for( ; ;) {
-        totalRead += read (confd, &buffer, MAXLINE);
-      
+    // keep receiving until client closes connection
+    while (receiving) {
+    
+        if ((bytes = recv (confd, &buffer, MAXLINE, 0)) != -1)
+            totalRead += bytes;
+        
+        // if zero is returned, the client closed connection
+        if (bytes == 0)
+            receiving = false;
+        
+        printf ("%d\n", totalRead);
         // if the end of the message is received
-        if (buffer[totalRead - 1] == '%' || buffer[totalRead - 1] == '\n') {
+        if (buffer[totalRead-1] == '%' || buffer[totalRead-1] == '\n') {
             printf ("TCP: %s\n", buffer);
-            input = strtok (buffer, "%\n");
-            result = reader (input);
+            buffer[totalRead-1] = '\0';
+            result = reader (buffer);
             
             if (peers > 0) {
                 
-                while (totalWrite < strlen (result)) { 
-                    totalWrite += write (confd, result, strlen (result));
+                while (totalWrite < strlen (result)) {
+                    if ((bytes = send (confd, result, strlen (result), 0)) != -1)
+                        totalWrite += bytes;
                 }
             }
                 
             totalRead = 0;
+            totalWrite = 0;
             buffer[0] = '\0'; //resets the buffer
        }
     }
@@ -319,33 +295,48 @@ void tcp_handler (int confd) {
 void
 udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
 	int rc;
-    int n;
+    int bytes;
 	socklen_t len;
 	char message [MAXLINE];
 	char *split;
 	char *result;
+	int totalSend, totalRecv;
+	bool receiving = true;
 	
-	for( ; ;) {
+	// keep receiving until client closes connection
+	while (receiving) {
 	    len = client_len;
-	    n = recvfrom(sockfd, message, MAXLINE, 0, client, &len);
-		
-	    if(n == -1) 
-		    perror("UDP reading");
+	    
+	    // Receive until read all the message
+	    if ((bytes = recvfrom(sockfd, message, MAXLINE, 0, client, &len)) != -1)
+	        totalRecv += bytes;
 
-        message [n-1] = 0;
+		// if zero is received the client closed the connection
+	    if(bytes == 0) 
+		    receiving = false;
+
+        if (message[totalRecv-1] == '%' || message[totalRecv-1] == '\n')
+            message [totalRecv-1] = 0;
         
         printf ("UDP: %s\n", message);
         
-        // datagram arrives in one package, so no need to check for more input
-        split = strtok (message, "%\n");
-        result = reader (split);
+        message[totalRecv-1] = '\0';
+        result = reader (message);
+        
+        // resets the buffer
+        message[0] = '\0';
+        totalRecv = 0;
+        
         printf ("Result: %s\n", result);
         
         // if there is a peers list that needs to be returned
         if (peers != 0) {
-            // sends 
-            if((n=sendto(sockfd, result, strlen(result), 0, client, client_len))==-1)
-			    perror("sendto");		  
+
+            while (totalSend < strlen (result)) {
+                if((bytes = sendto(sockfd, result, strlen(result), 0, client,       
+                    client_len)) != -1)
+			        totalSend += bytes;
+		    }
         }
 	}
 	
@@ -356,10 +347,14 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
 void sig_child (int signo) {
     pid_t pid;
     int stat;
+    
+    // waitpid () might overwrite errno, so save it
+    int saved_errno = errno;
 
     while ((pid = waitpid (-1, &stat, WNOHANG)) > 0)
         printf ("child %d terminated]n", pid);
-    return;
+    
+    errno = saved_errno;
 }
 
 
@@ -444,13 +439,13 @@ int main (int argc, char *argv[]) {
     // optional value for Setsockopt
     const int on = 1;
     
-    // create listening TCP socket
+    // get tcp socket descriptor
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
         perror ("TCP socket");
         exit (1);
     }
 
-    // clear the server structure, just in case
+    // zeroes out the sin_zero field
     bzero(&server, addr_len);
 
     server.sin_family = AF_INET;
@@ -462,15 +457,18 @@ int main (int argc, char *argv[]) {
     printf("Binding tcp connection to port %d\n", tcpPort);
 
     // SO_REUSEADDR allows multiple sockets to listen in on the port
+    // also gets rid of "address in use" error
     if (setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)) < 0)
         perror ("TCP options");
 
+    // bind server to specified port
     if (bind (tcpfd, (struct sockaddr*) &server, addr_len) < 0) {
         perror ("TCP binding");
         close (tcpfd);
         exit(-1);  
     }
 
+    // listen for incoming connections
     if (listen(tcpfd, MAX_CALLS) < 0)
         perror ("");
 
@@ -521,15 +519,17 @@ int main (int argc, char *argv[]) {
             else 
                 perror("Select");
         }
-        
+
         // if a tcp connection is requested
         if (FD_ISSET(tcpfd, &rset)) {
             printf("TCP connection established\n");
+            
+            // Accept the call
             confd = accept (tcpfd, (struct sockaddr*) &client, 
                     &client_len);
 
-            if ((childpid = fork()) == 0) {;
-                close (tcpfd);
+            if ((childpid = fork()) == 0) {
+                close (tcpfd); // child doesn't need it
                 tcp_handler (confd);
                 exit (0);
             }
