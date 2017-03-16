@@ -83,32 +83,34 @@ static int gossipCallback(void *message, int argc, char **argv,
     tempIP = argv[i];
 	tempPort = argv[i+1];
 
-	sendUDP ((char *) message, tempIP, tempPort);
+	broadcast ((char *) message, tempIP, tempPort);
 	return 0;
 }
 
-void sendUDP(char *message, char *address, char *port)
+void broadcast (char *message, char *address, char *port)
 {
     int  sockfd, num, recieved;
     struct addrinfo hints, *servinfo, *p;
     char  buf[MAXLINE];  
 	struct sockaddr_in peer;
-	int totalSent, bytes; 
-
+	int totalSent = 0; 
+	int bytes; 
     
     bzero (&hints, sizeof hints);
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     
+    printf ("Sending message to %s on port %s\n", address, port);
+    
     if ((recieved = getaddrinfo (address, port, &hints, &servinfo)) != 0) {
-        perror ("Get address info");
+        fprintf (stderr, "SendUDP: Address does not exist\n");
         return;
     }
     
     for (p = servinfo; p != NULL; p = p->ai_next) {
         if ((sockfd = socket (p->ai_family, p->ai_socktype, p->ai_protocol))
             == -1) {
-            perror ("sendUDP");
+            perror ("Broadcast");
             continue;
         }
         
@@ -121,17 +123,19 @@ void sendUDP(char *message, char *address, char *port)
 	}
 	
 	while (totalSent < strlen (message)) {
-	    
+	  
 	    if ((bytes = sendto (sockfd, message, strlen(message), 0, p->ai_addr,
 	        p->ai_addrlen)) == -1) {
 	        
 	        perror ("sendUDP send");
 	        return;
 	    }
-	    	    
+	    
+	    printf ("%d %d\n", totalSent, strlen(message));    
 	    totalSent += bytes;
 	}
 	
+	printf ("Sent\n");
 	freeaddrinfo (servinfo);
 	close (sockfd);
 }
@@ -520,6 +524,7 @@ int main (int argc, char *argv[]) {
                 perror("Select");
         }
 
+        printf("here\n");
         // if a tcp connection is requested
         if (FD_ISSET(tcpfd, &rset)) {
             printf("TCP connection established\n");
@@ -536,7 +541,8 @@ int main (int argc, char *argv[]) {
 
             close (confd);
         }
-
+        
+        printf ("here\n");
         // if a udp connection is requested
         if (FD_ISSET (udpfd, &rset)) {
             printf("UDP connection established\n");
