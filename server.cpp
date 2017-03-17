@@ -44,7 +44,7 @@ string latestGossip;
 
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
-    fprintf (stderr, "\nCancelling server, closing all file handlers\n");
+    fprintf (stderr, "Cancelling server, closing all file handlers\n");
     close (tcpfd);
     close (udpfd);
     close (confd);
@@ -130,8 +130,7 @@ int broadcast (char *message, char *address, char *port)
 	        if (errno == EINTR) continue;
 	        return (totalSent == 0) ? -1 : totalSent;
 	    }
-	    
-	    printf ("%d %d\n", totalSent, strlen(message));    
+  
 	    totalSent += bytes;
 	}
 	
@@ -167,27 +166,24 @@ void broadcastGossip(char *message) {
 char *reader (string fulltext) {
 
     int rc;
-    string name, port, ip;
-    string digest, message, date;
-    string sql;
-    string values;
+    string name, port, ip; // Values for Peer message
+    string digest, message, date; // Values for gossip message
+    string sql; // Sql statement
+    string values; // Values for sql query
+    string split; // contains text delimited by either ':'
     bool broadcast = false; // check if message needs to be transmitted
     bool sendPeers = false; // check if the client asked for PEERS?
     peers = 0; // number of peers currently known
-
+    char* zErrMsg = 0; // Buffer for error handling.
 
     istringstream stream (fulltext);
-    string split; // contains text delimited by either ':'
-    
-    // Buffer for error handling.
-    char* zErrMsg = 0;
-    
+
     char* result = new char[MAXLINE];
     char* output = new char[MAXLINE];
     result[0] = '\0'; // because life is hard, and tears flow freely
     output[0] = '\0';
-    
-    getline (stream, split, ':');
+   
+    getline (stream, split, ':');  
     
     if (split == "GOSSIP") {
         getline (stream, digest, ':');
@@ -222,11 +218,11 @@ char *reader (string fulltext) {
         sql = "INSERT OR REPLACE INTO PEERS (PEER, PORT, IP)" \
               "VALUES (" + values + ");";
     
-    } else if (split == "PEERS?") {
+    } else if (fulltext == "PEERS?") {
         sql = "SELECT * from PEERS;";
         sendPeers = true;
     }
-
+    
     rc = sqlite3_exec(db, sql.c_str(), callback, result, &zErrMsg);
     
     // Constraint due to primary key or not null
@@ -273,7 +269,8 @@ int tcp_handler (int confd, int flags) {
     char buffer [MAXLINE];
     int totalRead = 0; // total number of bytes read from client
     int totalWrite = 0; // total bytes written to client
-    char *result; 
+    char *result;
+    char *input;
     int bytes;
     bool receiving = true;
     
@@ -290,12 +287,9 @@ int tcp_handler (int confd, int flags) {
         // if the end of the message is received
         if (buffer[totalRead-1] == '\n') {
             
-            if (buffer[totalRead-2] == '%')
-                buffer[totalRead-2] = '\0';
-                
-            printf ("TCP: %s\n", buffer);
-            result = reader (buffer);
-
+            input = strtok (buffer, "%\n");
+            printf ("TCP: %s\n", input);
+            result = reader (input);
             printf ("Result: %s\n", result);
             
             // Send result to the user
@@ -327,30 +321,31 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len, int flags) {
     int bytes;
 	socklen_t len = client_len;
 	char message [MAXLINE];
-	char *split;
+	char *input;
 	char *result;
 	int totalSent, totalRecv;
 	bool receiving = true;
 	
 	// keep receiving until client closes connection
 	while (receiving) {
-	    
-	    printf ("here\n");
+
 	    // Receive until read all the message
 	    if ((bytes = recvfrom(sockfd, message, MAXLINE, flags, client, &len)) != -1)
 	        totalRecv += bytes;
+	        
+	    else perror ("Recieve");
 
 		// if zero is received the client closed the connection
 	    if(bytes == 0) 
 		    receiving = false;
-
+        
+        printf ("received: %s %d", message, totalRecv);
+        printf ("Last char: %c", message[totalRecv-1]);
+        
         if (message[totalRecv-1] == '\n') {
             
-            if (message[totalRecv-2] == '%')
-                message[totalRecv-2] = '\0';
-                  
-            printf ("UDP: %s\n", message);
-            result = reader (message);
+            input = strtok (message, "%n");
+            result = reader (input);
         
             // resets the buffer
             message[0] = '\0';
@@ -449,30 +444,41 @@ int main (int argc, char *argv[]) {
     setup_database (filePath);
     
     int nready; // return result for poll
-    int msgLength;
-    char message[MAXLINE];
+    int rc; // Return code
+    const int nfds = 2; // number of file descriptors
+    const int on = 1; // optional value for Setsockopt and ioctl
     pid_t child;
     struct sockaddr_in client, server;
-    struct pollfd ufds[2]; // used to select between the udp and tcp
+    struct pollfd ufds[nfds]; // used to select between the udp and tcp
 
     socklen_t addr_len = sizeof (server);
     socklen_t client_len = sizeof (client);
 
-    int recv_len;
-
     int tcpPort, udpPort;
     int childpid;
     void sig_child (int);
-
-    // optional value for Setsockopt
-    const int on = 1;
-    
+ 
     // get tcp socket descriptor
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
         perror ("TCP socket");
-        exit (1);
+        exit (-1);
+    }
+    
+    // SO_REUSEADDR allows multiple sockets to listen in on the port
+    // also gets rid of "address in use" error
+    if ((rc = setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on))) < 0) {
+        perror ("setsockopt");
+        close (tcpfd);
+        exit (-1);
     }
 
+    // set socket to be nonblocking
+    if ((rc = ioctl(tcpfd, FIONBIO, (char *)&on)) < 0) {
+        perror ("ioctl");
+        close (tcpfd);
+        exit (-1);
+    }
+        
     // zeroes out the sin_zero field
     bzero(&server, addr_len);
 
@@ -484,28 +490,25 @@ int main (int argc, char *argv[]) {
     tcpPort = ntohs(server.sin_port);
     printf("Binding tcp connection to port %d\n", tcpPort);
 
-    // SO_REUSEADDR allows multiple sockets to listen in on the port
-    // also gets rid of "address in use" error
-    if (setsockopt (tcpfd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof (on)) < 0)
-        perror ("TCP options");
-
     // bind server to specified port
-    if (bind (tcpfd, (struct sockaddr*) &server, addr_len) < 0) {
+    if ((rc = bind (tcpfd, (struct sockaddr*) &server, addr_len)) < 0) {
         perror ("TCP binding");
         close (tcpfd);
         exit(-1);  
     }
 
     // listen for incoming connections
-    if (listen(tcpfd, MAX_CALLS) < 0)
-        perror ("");
+    if ((rc = listen(tcpfd, MAX_CALLS)) < 0) {
+        perror ("listen");
+        close (tcpfd);
+        exit (-1);
+    }
 
     //Build UDP socket 
-    udpfd = socket(AF_INET, SOCK_DGRAM, 0);   
-
-    if(udpfd < 0)  
+    if((udpfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)  
     {  
-        perror("UDP socket");  
+        perror("UDP socket");
+        close (udpfd); 
         exit(-1);  
     }  
           
@@ -519,11 +522,8 @@ int main (int argc, char *argv[]) {
     udpPort = ntohs(server.sin_port);
     printf("Binding udp connection to port %d\n", udpPort);
           
-    //Bind socket.
-    int err_log = bind(udpfd, (struct sockaddr*) &server, sizeof(server));  
-        
-    if(err_log != 0)  
-    {  
+    //Bind socket.         
+    if((rc = bind(udpfd, (struct sockaddr*) &server, sizeof(server))) < 0) {  
         perror("bind");  
         close(udpfd);        
         exit(-1);  
@@ -533,37 +533,34 @@ int main (int argc, char *argv[]) {
     signal (SIGCHLD, sig_child); 
     
     ufds[0].fd = tcpfd;
-    ufds[0].events = POLLIN | POLLPRI; // check for normal or out-of-band data
+    ufds[0].events = POLLIN;
     
     ufds[1].fd = udpfd;
-    ufds[1].events = POLLIN | POLLPRI;
+    ufds[1].events = POLLIN;
+    int flags;
 
+    // start persistent server
     for ( ; ; ) {
-        // -1 means no timeout occurs, ever
+        // -1 means no timeouts occur, ever
         if ((nready = poll(ufds, 2, -1)) < 0) {     
             //if (errno = EINTR) continue; // don't want signals to create interrupts
             perror("Poll");
+            break;
         
         // should never be called with no timeouts
         } else if (nready == 0) {
             printf ("Timeout occured\n");
+            break;
         
-        } else if (ufds[0].revents) {
+        } else if (ufds[0].revents & POLLIN) {
             printf("TCP connection established\n");
                 
             // Accept the call
             confd = accept (tcpfd, (struct sockaddr*) &client, 
                 &client_len);
-                
-            int flags;
-            // check if receiving normal data
-            if (ufds[0].revents & POLLIN)
-                flags = 0;
-                
-            // check if out-of-band data
-            else if (ufds[0].revents & POLLPRI)
-                flags = MSG_OOB;
-                
+            
+            flags = 0;
+                 
             if ((childpid = fork()) == 0) {
                 close (tcpfd); // child doesn't need it
                 tcp_handler (confd, flags);
@@ -573,21 +570,13 @@ int main (int argc, char *argv[]) {
             
             close (confd);
             
-        } else if (ufds[1].revents) {
+        } else if (ufds[1].revents & POLLIN) {
             printf("UDP connection established\n");
             
-            int flags;
-            // check if receiving normal data
-            if (ufds[1].revents & POLLIN)
-                flags = 0;
-                
-            // check if out-of-band data
-            else if (ufds[1].revents & POLLPRI)
-                flags = MSG_OOB;
-            
+            flags = 0;          
             udp_handler (udpfd, (sockaddr*) &client, 
                 client_len, flags);  
-            close (udpfd);  
+            //close (udpfd);  
         }
     }
        

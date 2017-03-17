@@ -37,12 +37,12 @@
 #include<netdb.h>
 #include <fcntl.h>
 #include <sys/poll.h> // for poll
+#include <pthread.h>
+#include <sys/ioctl.h>
 
 ///////////////////////////
 // Forwarded Subroutines //
 ///////////////////////////
-
-void gossipBroadcast();
 
 void gossipCallback(void* , int, char, char);
 
