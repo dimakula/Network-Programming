@@ -36,6 +36,7 @@
 #include <sstream>
 #include<netdb.h>
 #include <fcntl.h>
+#include <sys/poll.h> // for poll
 
 ///////////////////////////
 // Forwarded Subroutines //
@@ -45,11 +46,9 @@ void gossipBroadcast();
 
 void gossipCallback(void* , int, char, char);
 
-void broadcast( char *, char *, char * );
+int broadcast( char *, char *, char * );
 
 void signal_stop (int);void sendUDP(std::string, std::string, int);
-
-void sendTCP(std::string, std::string, int);
 
 void broadcastGossip(char *);
 
@@ -58,10 +57,10 @@ void broadcastGossip(char *);
 char* reader (std::string);
 
 //handler for the tcp socket
-void tcp_handler (int);
+int tcp_handler ( int, int );
 
 // handler for the udp socket
-void udp_handler (int , sockaddr*, socklen_t );
+int udp_handler (int , sockaddr*, socklen_t, int );
 
 // run when child is created
 void sig_child (int signo);

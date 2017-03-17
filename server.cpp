@@ -61,7 +61,7 @@ static int peers;
 static int
 callback (void *result, int argc, char **argv, char **azColName) {
   
-    peers++;
+    peers++; // increment the number of peers by one
     int i = 0;
     strncat ((char *)result, argv[i], strlen (argv[i]));
     strncat ((char *)result, ":", 1);
@@ -87,7 +87,7 @@ static int gossipCallback(void *message, int argc, char **argv,
 	return 0;
 }
 
-void broadcast (char *message, char *address, char *port)
+int broadcast (char *message, char *address, char *port)
 {
     int  sockfd, num, recieved;
     struct addrinfo hints, *servinfo, *p;
@@ -104,7 +104,7 @@ void broadcast (char *message, char *address, char *port)
     
     if ((recieved = getaddrinfo (address, port, &hints, &servinfo)) != 0) {
         fprintf (stderr, "SendUDP: Address does not exist\n");
-        return;
+        return -1;
     }
     
     for (p = servinfo; p != NULL; p = p->ai_next) {
@@ -119,7 +119,7 @@ void broadcast (char *message, char *address, char *port)
 
 	if (p == NULL) {
 	    fprintf (stderr, "sendUDP: Failed to create socket\n");
-	    return;
+	    return -1;
 	}
 	
 	while (totalSent < strlen (message)) {
@@ -127,8 +127,8 @@ void broadcast (char *message, char *address, char *port)
 	    if ((bytes = sendto (sockfd, message, strlen(message), 0, p->ai_addr,
 	        p->ai_addrlen)) == -1) {
 	        
-	        perror ("sendUDP send");
-	        return;
+	        if (errno == EINTR) continue;
+	        return (totalSent == 0) ? -1 : totalSent;
 	    }
 	    
 	    printf ("%d %d\n", totalSent, strlen(message));    
@@ -138,6 +138,7 @@ void broadcast (char *message, char *address, char *port)
 	printf ("Sent\n");
 	freeaddrinfo (servinfo);
 	close (sockfd);
+	return 0;
 }
 
 
@@ -170,16 +171,21 @@ char *reader (string fulltext) {
     string digest, message, date;
     string sql;
     string values;
-    bool broadcast = false;
-    bool peersRequest = false; // Set to true when PEERS? appears
+    bool broadcast = false; // check if message needs to be transmitted
+    bool sendPeers = false; // check if the client asked for PEERS?
     peers = 0; // number of peers currently known
 
 
     istringstream stream (fulltext);
-    string split;
+    string split; // contains text delimited by either ':'
     
     // Buffer for error handling.
     char* zErrMsg = 0;
+    
+    char* result = new char[MAXLINE];
+    char* output = new char[MAXLINE];
+    result[0] = '\0'; // because life is hard, and tears flow freely
+    output[0] = '\0';
     
     getline (stream, split, ':');
     
@@ -194,6 +200,7 @@ char *reader (string fulltext) {
         sql = "INSERT INTO GOSSIP (DIGEST, MESSAGE, GENERATED)" \
               "VALUES (" + values + ");";
         
+        // need to broadcast message at the end once sql is executed
         broadcast = true;
     
     } else if (split == "PEER") {
@@ -211,49 +218,57 @@ char *reader (string fulltext) {
         
         values = "\'" + name + "\', " + port + ", \'" + ip + "\'";
         
+        // inserts or replaces peer with new values
         sql = "INSERT OR REPLACE INTO PEERS (PEER, PORT, IP)" \
               "VALUES (" + values + ");";
     
     } else if (split == "PEERS?") {
         sql = "SELECT * from PEERS;";
+        sendPeers = true;
     }
-    
-    char* result = new char[512];
-    char* output = new char[512];
-    result[0] = '\0'; // because life is hard, and tears flow freely
-    output[0] = '\0';
 
     rc = sqlite3_exec(db, sql.c_str(), callback, result, &zErrMsg);
-    
-    string peerNum = to_string (peers);
-    strncat ((char *)output, "|PEERS:", 7);
-    printf ("%s", output);
-
-    strncat (output, peerNum.c_str(), strlen (peerNum.c_str()));
-    strncat (output, "|", 1);
-    strncat (output, result, strlen (result));
-    strncat (output, "\n", 1);
     
     // Constraint due to primary key or not null
     if (rc == SQLITE_CONSTRAINT) {
         fprintf(stderr, "DISCARDED");
+        strncat (output, "DISCARDED", 9);
      
     } else if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        strncat (output, "ERROR", 5);
         sqlite3_free(zErrMsg);
        
     } else if (broadcast) {
     	broadcastGossip((char *)message.c_str());
     }
+    
+    else if (sendPeers) {
+        // Form output string to send to client
+        string peerNum = to_string (peers);
+        strncat ((char *)output, "|PEERS:", 7);
 
+        strncat (output, peerNum.c_str(), strlen (peerNum.c_str()));
+        strncat (output, "|", 1);
+    }
+
+    if (strlen (result) != 0) {
+        strncat (output, result, strlen (result));
+    
+    // so that you don't send OK along with |PEERS:0| 
+    } else if (!sendPeers) {
+        strncat (output, "OK", 2);
+    }
+    
+    strncat (output, "\n", 1);
     delete[] result; //free up heap
     
-    // return the result of the PEERS? request, if applicable
+    // return output for the handler to send
     return (char *)output;
 }
 
 //handler for the tcp socket
-void tcp_handler (int confd) {
+int tcp_handler (int confd, int flags) {
   
     char buffer [MAXLINE];
     int totalRead = 0; // total number of bytes read from client
@@ -265,26 +280,32 @@ void tcp_handler (int confd) {
     // keep receiving until client closes connection
     while (receiving) {
     
-        if ((bytes = recv (confd, &buffer, MAXLINE, 0)) != -1)
+        if ((bytes = recv (confd, &buffer, MAXLINE, flags)) != -1)
             totalRead += bytes;
         
         // if zero is returned, the client closed connection
         if (bytes == 0)
             receiving = false;
         
-        printf ("%d\n", totalRead);
         // if the end of the message is received
-        if (buffer[totalRead-1] == '%' || buffer[totalRead-1] == '\n') {
-            printf ("TCP: %s\n", buffer);
-            buffer[totalRead-1] = '\0';
-            result = reader (buffer);
+        if (buffer[totalRead-1] == '\n') {
             
-            if (peers > 0) {
+            if (buffer[totalRead-2] == '%')
+                buffer[totalRead-2] = '\0';
                 
-                while (totalWrite < strlen (result)) {
-                    if ((bytes = send (confd, result, strlen (result), 0)) != -1)
-                        totalWrite += bytes;
+            printf ("TCP: %s\n", buffer);
+            result = reader (buffer);
+
+            printf ("Result: %s\n", result);
+            
+            // Send result to the user
+            while (totalWrite < strlen (result)) {
+                if ((bytes = send (confd, result, strlen (result), 0)) == -1) {
+                    if (errno == EINTR) continue;
+                    return (totalWrite == 0) ? -1 : totalWrite;
                 }
+                    
+                totalWrite += bytes;
             }
                 
             totalRead = 0;
@@ -292,59 +313,67 @@ void tcp_handler (int confd) {
             buffer[0] = '\0'; //resets the buffer
        }
     }
+    
+    printf ("Client has closed the connection\n");
+    delete [] result;
+    return 0;
 }
 
 
 // handler for the udp socket
-void
-udp_handler (int sockfd, sockaddr *client, socklen_t client_len) {
+int
+udp_handler (int sockfd, sockaddr *client, socklen_t client_len, int flags) {
 	int rc;
     int bytes;
-	socklen_t len;
+	socklen_t len = client_len;
 	char message [MAXLINE];
 	char *split;
 	char *result;
-	int totalSend, totalRecv;
+	int totalSent, totalRecv;
 	bool receiving = true;
 	
 	// keep receiving until client closes connection
 	while (receiving) {
-	    len = client_len;
 	    
+	    printf ("here\n");
 	    // Receive until read all the message
-	    if ((bytes = recvfrom(sockfd, message, MAXLINE, 0, client, &len)) != -1)
+	    if ((bytes = recvfrom(sockfd, message, MAXLINE, flags, client, &len)) != -1)
 	        totalRecv += bytes;
 
 		// if zero is received the client closed the connection
 	    if(bytes == 0) 
 		    receiving = false;
 
-        if (message[totalRecv-1] == '%' || message[totalRecv-1] == '\n')
-            message [totalRecv-1] = 0;
+        if (message[totalRecv-1] == '\n') {
+            
+            if (message[totalRecv-2] == '%')
+                message[totalRecv-2] = '\0';
+                  
+            printf ("UDP: %s\n", message);
+            result = reader (message);
         
-        printf ("UDP: %s\n", message);
+            // resets the buffer
+            message[0] = '\0';
+            totalRecv = 0;
         
-        message[totalRecv-1] = '\0';
-        result = reader (message);
+            printf ("Result: %s\n", result);
         
-        // resets the buffer
-        message[0] = '\0';
-        totalRecv = 0;
-        
-        printf ("Result: %s\n", result);
-        
-        // if there is a peers list that needs to be returned
-        if (peers != 0) {
-
-            while (totalSend < strlen (result)) {
+            while (totalSent < strlen (result)) {
+                
                 if((bytes = sendto(sockfd, result, strlen(result), 0, client,       
-                    client_len)) != -1)
-			        totalSend += bytes;
+                        client_len)) == -1) {
+                    if (errno == EINTR) continue;
+                    return (totalSent == 0) ? -1 : totalSent;
+                }
+			    
+			    totalSent += bytes;
 		    }
         }
 	}
 	
+	printf ("Client has closed the connection\n");
 	delete []result;
+	return totalSent;
 }
 
 // run when child is created
@@ -398,6 +427,7 @@ int main (int argc, char *argv[]) {
     // execute signal_stop method upon receiving control-c or control-z commands
     signal (SIGINT, signal_stop);
     signal (SIGTSTP, signal_stop);
+    
     char c;
     char* filePath;
     unsigned short int port;
@@ -418,12 +448,12 @@ int main (int argc, char *argv[]) {
     // database for storing peers and messages 
     setup_database (filePath);
     
-    int maxfdp1, nready;
+    int nready; // return result for poll
     int msgLength;
-    fd_set rset; // check which file descriptor is set
     char message[MAXLINE];
     pid_t child;
     struct sockaddr_in client, server;
+    struct pollfd ufds[2]; // used to select between the udp and tcp
 
     socklen_t addr_len = sizeof (server);
     socklen_t client_len = sizeof (client);
@@ -431,14 +461,8 @@ int main (int argc, char *argv[]) {
     int recv_len;
 
     int tcpPort, udpPort;
-
     int childpid;
     void sig_child (int);
-    
-    struct timeval timeout; // timeout for selecting between file descriptors
-    timeout.tv_sec = 60;
-    timeout.tv_usec = 0;
-    
 
     // optional value for Setsockopt
     const int on = 1;
@@ -508,50 +532,65 @@ int main (int argc, char *argv[]) {
     // catches signal when child is created
     signal (SIGCHLD, sig_child); 
     
-    FD_ZERO(&rset);
+    ufds[0].fd = tcpfd;
+    ufds[0].events = POLLIN | POLLPRI; // check for normal or out-of-band data
     
-    // keep track of the biggest file descriptor for the select statement
-    maxfdp1 = max (tcpfd, udpfd) + 1;
+    ufds[1].fd = udpfd;
+    ufds[1].events = POLLIN | POLLPRI;
 
     for ( ; ; ) {
-        FD_SET (tcpfd, &rset);
-        FD_SET (udpfd, &rset);
+        // -1 means no timeout occurs, ever
+        if ((nready = poll(ufds, 2, -1)) < 0) {     
+            //if (errno = EINTR) continue; // don't want signals to create interrupts
+            perror("Poll");
         
-        if ((nready = select (maxfdp1, &rset, NULL, NULL, &timeout)) < 0) {
-            if (errno == EINTR)
-                continue;
-            else 
-                perror("Select");
-        }
-
-        printf("here\n");
-        // if a tcp connection is requested
-        if (FD_ISSET(tcpfd, &rset)) {
+        // should never be called with no timeouts
+        } else if (nready == 0) {
+            printf ("Timeout occured\n");
+        
+        } else if (ufds[0].revents) {
             printf("TCP connection established\n");
-            
+                
             // Accept the call
             confd = accept (tcpfd, (struct sockaddr*) &client, 
-                    &client_len);
-
+                &client_len);
+                
+            int flags;
+            // check if receiving normal data
+            if (ufds[0].revents & POLLIN)
+                flags = 0;
+                
+            // check if out-of-band data
+            else if (ufds[0].revents & POLLPRI)
+                flags = MSG_OOB;
+                
             if ((childpid = fork()) == 0) {
                 close (tcpfd); // child doesn't need it
-                tcp_handler (confd);
+                tcp_handler (confd, flags);
+                close (confd);
                 exit (0);
             }
-
+            
             close (confd);
-        }
-        
-        printf ("here\n");
-        // if a udp connection is requested
-        if (FD_ISSET (udpfd, &rset)) {
+            
+        } else if (ufds[1].revents) {
             printf("UDP connection established\n");
+            
+            int flags;
+            // check if receiving normal data
+            if (ufds[1].revents & POLLIN)
+                flags = 0;
+                
+            // check if out-of-band data
+            else if (ufds[1].revents & POLLPRI)
+                flags = MSG_OOB;
+            
             udp_handler (udpfd, (sockaddr*) &client, 
-                client_len);  
-            close (udpfd);       
+                client_len, flags);  
+            close (udpfd);  
         }
     }
-    
+       
     sqlite3_close(db);
 }
 
