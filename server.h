@@ -39,6 +39,25 @@
 #include <sys/poll.h> // for poll
 #include <pthread.h>
 #include <sys/ioctl.h>
+#include <mutex> // for locks to prevent threads from writing to db at the same time
+
+///////////////////////////
+//Thread argument structs//
+///////////////////////////
+
+struct tcp_args {
+    int confd;
+    int flags;
+    char *buffer;
+};
+
+struct udp_args {
+    int udpfd;
+    sockaddr* client;
+    int client_length;
+    int flags;
+    char *buffer;
+}; 
 
 ///////////////////////////
 // Forwarded Subroutines //
@@ -57,10 +76,10 @@ void broadcastGossip(char *);
 char* reader (char *, int &);
 
 //handler for the tcp socket
-void* tcp_handler ( int, int );
+void* tcp_handler ( void* );
 
 // handler for the udp socket
-void* udp_handler (int , sockaddr*, socklen_t, int );
+void* udp_handler (void* );
 
 // run when child is created
 void sig_child (int signo);

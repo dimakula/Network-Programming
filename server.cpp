@@ -21,10 +21,9 @@
 #include "server.h"
 using namespace std;
 
-// the maximum number of queued connections allowed
-#define MAX_CALLS 5
-#define MAXLINE 512
-#define MAX_THREADS 5
+#define MAX_CALLS 5 // the maximum number of queued connections allowed
+#define MAXLINE 512 // the maximum size of the input buffer
+#define MAX_THREADS 5 // Maximum number of threads that can be operating
 
 // get path separator for the specific os
 const char PathSeparator =
@@ -42,6 +41,9 @@ sqlite3 *db;
 
 // Holds the latest gossip message.
 string latestGossip;
+
+// Prevents threads from writing to the database at the same time
+mutex database_mutex;
 
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
@@ -248,7 +250,10 @@ char *reader (char *buffer, int &offset) {
         return NULL;
     }
     
+    // locks sql query in case thread is trying to insert or update data
+    database_mutex.lock();
     rc = sqlite3_exec(db, sql.c_str(), callback, result, &zErrMsg);
+    database_mutex.unlock();
     
     // Constraint due to primary key or not null
     if (rc == SQLITE_CONSTRAINT) {
@@ -297,15 +302,24 @@ char *reader (char *buffer, int &offset) {
 }
 
 //handler for the tcp socket
-void* tcp_handler (int confd, int flags) {
-  
-    char buffer [MAXLINE];
+void* tcp_handler (void *threadArgs) {
+
     int offset = 0; // number of bytes read from the client
     int totalWrite = 0; // total bytes written to client
     char *result;
     char *input;
     int bytes;
     bool receiving = true;
+    
+    // Guarantees that thread resources are deallocated upon return, no need to
+    // rejoin the main thread
+    pthread_detach(pthread_self()); 
+    
+    // get all the thread argument
+    int confd =     ((struct tcp_args *) threadArgs) -> confd;
+    int flags =     ((struct tcp_args *) threadArgs) -> flags;
+    char *buffer =  ((struct tcp_args *) threadArgs) -> buffer;
+    //free (threadArgs);
     
     // keep receiving until client closes connection
     while (receiving) {
@@ -314,6 +328,7 @@ void* tcp_handler (int confd, int flags) {
                 flags)) != -1)
             offset += bytes;
         
+        printf ("Bytes: %d\n", bytes);
         // if zero is returned, the client closed connection
         if (bytes == 0)
             receiving = false;
@@ -336,30 +351,40 @@ void* tcp_handler (int confd, int flags) {
         } 
     }
     
+    close (confd);
     printf ("Client has closed the connection\n");
     delete [] result;
 }
 
 
 // handler for the udp socket
-void*
-udp_handler (int sockfd, sockaddr *client, socklen_t client_len, int flags) {
+void* udp_handler (void *threadArgs) {
 	int rc;
     int bytes;
-	socklen_t len = client_len;
-	char buffer [MAXLINE];
 	int offset = 0; // number of bytes read from the client
 	char *input;
 	char *result;
 	int totalSent;
 	bool receiving = true;
 	
+	// Guarantees that thread resources are deallocated upon return, no need to
+    // rejoin the main thread
+    pthread_detach(pthread_self()); 
+    
+    // get all the thread argument
+    int sockfd =            ((struct udp_args *) threadArgs) -> udpfd;
+    sockaddr* client =      ((struct udp_args *) threadArgs) -> client; 
+    socklen_t client_len =  ((struct udp_args *) threadArgs) -> client_length;
+    int flags =             ((struct udp_args *) threadArgs) -> flags;
+    char *buffer =          ((struct udp_args *) threadArgs) -> buffer;
+    //free (threadArgs);
+	
 	// keep receiving until client closes connection
 	while (receiving) {
 
 	    // Receive until read all the message
 	    if ((bytes = recvfrom(sockfd, buffer + offset, MAXLINE - offset,
-	            flags, client, &len)) != -1)
+	            flags, client, &client_len)) != -1)
 	        offset += bytes;
 	        
 	    else perror ("Recieve");
@@ -388,6 +413,7 @@ udp_handler (int sockfd, sockaddr *client, socklen_t client_len, int flags) {
 		}
 	}
 	
+	close (sockfd);
 	printf ("Client has closed the connection\n");
 	delete []result;
 }
@@ -478,10 +504,9 @@ int main (int argc, char *argv[]) {
     int tcpPort, udpPort;
     int childpid;
     void sig_child (int);
-    
-    pthread_t threads[MAX_THREADS];
+
     int numThreads = 0; // current number of threads active
-    int threadID = 0;
+    pthread_t threadID; // current threadID, not used for anything
  
     // get tcp socket descriptor
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -566,6 +591,7 @@ int main (int argc, char *argv[]) {
 
     // start persistent server
     for ( ; ; ) {
+        char *buffer = new char[MAXLINE];
         // -1 means no timeouts occur, ever
         if ((nready = poll(ufds, 2, -1)) < 0) {     
             //if (errno = EINTR) continue; // don't want signals to create interrupts
@@ -577,6 +603,7 @@ int main (int argc, char *argv[]) {
             printf ("Timeout occured\n");
             break;
         
+        
         } else if (ufds[0].revents & POLLIN) {
             printf("TCP connection established\n");
                 
@@ -585,24 +612,27 @@ int main (int argc, char *argv[]) {
                 &client_len);
             
             flags = 0;
-
-            tcp_handler (confd, flags);
-            /*if ((childpid = fork()) == 0) {
-                close (tcpfd); // child doesn't need it
-                tcp_handler (confd, flags);
-                close (confd);
-                exit (0);
-            }*/
             
-            close (confd);
+            struct tcp_args threadArgs { confd, flags, buffer, };
+            
+            if (pthread_create (&threadID, NULL, tcp_handler, 
+                    &threadArgs) != 0) {
+                perror ("Thread_create");
+                exit (1);
+            }
             
         } else if (ufds[1].revents & POLLIN) {
             printf("UDP connection established\n");
+            flags = 0; 
             
-            flags = 0;          
-            udp_handler (udpfd, (sockaddr*) &client, 
-                client_len, flags);  
-            //close (udpfd);  
+            struct udp_args threadArgs { udpfd, (sockaddr*) &client,
+                client_len, flags, buffer, };
+                   
+            if (pthread_create (&threadID, NULL, udp_handler,
+                    &threadArgs) != 0) {
+                perror ("Thread_create");
+                exit (1);
+            }   
         }
     }
        
