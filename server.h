@@ -48,19 +48,19 @@ void gossipCallback(void* , int, char, char);
 
 int broadcast( char *, char *, char * );
 
-void signal_stop (int);void sendUDP(std::string, std::string, int);
+void signal_stop (int);
 
 void broadcastGossip(char *);
 
 // Parses the user commands and stores them in an sqlite3
 // database
-char* reader (std::string);
+char* reader (char *, int &);
 
 //handler for the tcp socket
-int tcp_handler ( int, int );
+void* tcp_handler ( int, int );
 
 // handler for the udp socket
-int udp_handler (int , sockaddr*, socklen_t, int );
+void* udp_handler (int , sockaddr*, socklen_t, int );
 
 // run when child is created
 void sig_child (int signo);

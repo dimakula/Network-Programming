@@ -24,6 +24,7 @@ using namespace std;
 // the maximum number of queued connections allowed
 #define MAX_CALLS 5
 #define MAXLINE 512
+#define MAX_THREADS 5
 
 // get path separator for the specific os
 const char PathSeparator =
@@ -103,7 +104,7 @@ int broadcast (char *message, char *address, char *port)
     printf ("Sending message to %s on port %s\n", address, port);
     
     if ((recieved = getaddrinfo (address, port, &hints, &servinfo)) != 0) {
-        fprintf (stderr, "SendUDP: Address does not exist\n");
+        fprintf (stderr, "Broadcast: Address does not exist\n");
         return -1;
     }
     
@@ -118,7 +119,7 @@ int broadcast (char *message, char *address, char *port)
     }
 
 	if (p == NULL) {
-	    fprintf (stderr, "sendUDP: Failed to create socket\n");
+	    fprintf (stderr, "Broadcast: Failed to create socket\n");
 	    return -1;
 	}
 	
@@ -162,10 +163,10 @@ void broadcastGossip(char *message) {
 }
 
 // Parses the user commands and stores them in an sqlite3
-// database
-char *reader (string fulltext) {
+// database, returns an output string to send to the client
+char *reader (char *buffer, int &offset) {
 
-    int rc;
+    int rc; // return character
     string name, port, ip; // Values for Peer message
     string digest, message, date; // Values for gossip message
     string sql; // Sql statement
@@ -175,14 +176,31 @@ char *reader (string fulltext) {
     bool sendPeers = false; // check if the client asked for PEERS?
     peers = 0; // number of peers currently known
     char* zErrMsg = 0; // Buffer for error handling.
+    bool ok = false;
+    size_t endOfMessage; // position in buffer for the end of valid input
+    string fulltext (buffer); // Used to find '%' or '\n' in the buffer
+    
+    // Check if a newline or % character is present, if not return null to get
+    // more input
+    endOfMessage = fulltext.find ("%");
+    if (endOfMessage > offset) endOfMessage = fulltext.find("\n");
+    if (endOfMessage > offset) return NULL;
+    
+    // Copy over valid message to parse using istringstream
+    char temp [endOfMessage+1];
+    memcpy (temp, &buffer[0], endOfMessage);
+    string shortenedText (temp);
+    istringstream stream (shortenedText);
 
-    istringstream stream (fulltext);
-
-    char* result = new char[MAXLINE];
-    char* output = new char[MAXLINE];
-    result[0] = '\0'; // because life is hard, and tears flow freely
+    char* result = new char[MAXLINE]; // Result of any select statements
+    char* output = new char[MAXLINE]; // output returned to respective handler
+    
+    // who knows what kind of junk is in the heap
+    result[0] = '\0';
     output[0] = '\0';
    
+   
+    // Parsing message
     getline (stream, split, ':');  
     
     if (split == "GOSSIP") {
@@ -198,6 +216,7 @@ char *reader (string fulltext) {
         
         // need to broadcast message at the end once sql is executed
         broadcast = true;
+        ok = true;
     
     } else if (split == "PEER") {
         getline (stream, name, ':');
@@ -217,10 +236,16 @@ char *reader (string fulltext) {
         // inserts or replaces peer with new values
         sql = "INSERT OR REPLACE INTO PEERS (PEER, PORT, IP)" \
               "VALUES (" + values + ");";
+              
+        ok = true;
     
-    } else if (fulltext == "PEERS?") {
+    } else if (split == "PEERS?") {
         sql = "SELECT * from PEERS;";
         sendPeers = true;
+    
+    // No Valid message has been found, presumably fragmented
+    } else {
+        return NULL;
     }
     
     rc = sqlite3_exec(db, sql.c_str(), callback, result, &zErrMsg);
@@ -251,23 +276,31 @@ char *reader (string fulltext) {
     if (strlen (result) != 0) {
         strncat (output, result, strlen (result));
     
-    // so that you don't send OK along with |PEERS:0| 
-    } else if (!sendPeers) {
+    // send ok 
+    } else if (ok) {
         strncat (output, "OK", 2);
     }
     
     strncat (output, "\n", 1);
     delete[] result; //free up heap
     
+        
+    // Take out the message from the buffer to free up space
+    offset = offset - (endOfMessage + 1);
+    printf ("offset: %d\n", offset);
+    printf ("endOfMessage: %d\n", endOfMessage + 1);
+    memcpy (buffer, &buffer[endOfMessage+1], (size_t) offset);
+    buffer[offset] = '\0';  
+    
     // return output for the handler to send
     return (char *)output;
 }
 
 //handler for the tcp socket
-int tcp_handler (int confd, int flags) {
+void* tcp_handler (int confd, int flags) {
   
     char buffer [MAXLINE];
-    int totalRead = 0; // total number of bytes read from client
+    int offset = 0; // number of bytes read from the client
     int totalWrite = 0; // total bytes written to client
     char *result;
     char *input;
@@ -277,98 +310,86 @@ int tcp_handler (int confd, int flags) {
     // keep receiving until client closes connection
     while (receiving) {
     
-        if ((bytes = recv (confd, &buffer, MAXLINE, flags)) != -1)
-            totalRead += bytes;
+        if ((bytes = recv (confd, buffer + offset, MAXLINE - offset, 
+                flags)) != -1)
+            offset += bytes;
         
         // if zero is returned, the client closed connection
         if (bytes == 0)
             receiving = false;
-        
-        // if the end of the message is received
-        if (buffer[totalRead-1] == '\n') {
             
-            input = strtok (buffer, "%\n");
-            printf ("TCP: %s\n", input);
-            result = reader (input);
-            printf ("Result: %s\n", result);
-            
-            // Send result to the user
-            while (totalWrite < strlen (result)) {
+        // While reader parses valid commands and returns non-null results
+        while ((result = reader(buffer, offset)) != NULL) {
+             printf ("TCP: %s\n", result);
+             
+             while (totalWrite < strlen (result)) {
                 if ((bytes = send (confd, result, strlen (result), 0)) == -1) {
                     if (errno == EINTR) continue;
-                    return (totalWrite == 0) ? -1 : totalWrite;
+                    perror ("send:");
                 }
                     
                 totalWrite += bytes;
             }
-                
-            totalRead = 0;
+            
+            // Reset the total bytes sent to the client
             totalWrite = 0;
-            buffer[0] = '\0'; //resets the buffer
-       }
+        } 
     }
     
     printf ("Client has closed the connection\n");
     delete [] result;
-    return 0;
 }
 
 
 // handler for the udp socket
-int
+void*
 udp_handler (int sockfd, sockaddr *client, socklen_t client_len, int flags) {
 	int rc;
     int bytes;
 	socklen_t len = client_len;
-	char message [MAXLINE];
+	char buffer [MAXLINE];
+	int offset = 0; // number of bytes read from the client
 	char *input;
 	char *result;
-	int totalSent, totalRecv;
+	int totalSent;
 	bool receiving = true;
 	
 	// keep receiving until client closes connection
 	while (receiving) {
 
 	    // Receive until read all the message
-	    if ((bytes = recvfrom(sockfd, message, MAXLINE, flags, client, &len)) != -1)
-	        totalRecv += bytes;
+	    if ((bytes = recvfrom(sockfd, buffer + offset, MAXLINE - offset,
+	            flags, client, &len)) != -1)
+	        offset += bytes;
 	        
 	    else perror ("Recieve");
 
+        
 		// if zero is received the client closed the connection
 	    if(bytes == 0) 
 		    receiving = false;
-        
-        printf ("received: %s %d", message, totalRecv);
-        printf ("Last char: %c", message[totalRecv-1]);
-        
-        if (message[totalRecv-1] == '\n') {
-            
-            input = strtok (message, "%n");
-            result = reader (input);
-        
-            // resets the buffer
-            message[0] = '\0';
-            totalRecv = 0;
-        
-            printf ("Result: %s\n", result);
-        
-            while (totalSent < strlen (result)) {
+		    
+		while ((result = reader(buffer, offset)) != NULL) {
+		    printf ("UDP: %s\n", result);
+		    
+		    while (totalSent < strlen (result)) {
                 
                 if((bytes = sendto(sockfd, result, strlen(result), 0, client,       
                         client_len)) == -1) {
                     if (errno == EINTR) continue;
-                    return (totalSent == 0) ? -1 : totalSent;
+                    perror ("sendto:");
                 }
 			    
 			    totalSent += bytes;
-		    }
-        }
+	        }
+	        
+	        // Reset the total bytes send to the client
+	        totalSent = 0;
+		}
 	}
 	
 	printf ("Client has closed the connection\n");
 	delete []result;
-	return totalSent;
 }
 
 // run when child is created
@@ -457,6 +478,10 @@ int main (int argc, char *argv[]) {
     int tcpPort, udpPort;
     int childpid;
     void sig_child (int);
+    
+    pthread_t threads[MAX_THREADS];
+    int numThreads = 0; // current number of threads active
+    int threadID = 0;
  
     // get tcp socket descriptor
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -560,13 +585,14 @@ int main (int argc, char *argv[]) {
                 &client_len);
             
             flags = 0;
-                 
-            if ((childpid = fork()) == 0) {
+
+            tcp_handler (confd, flags);
+            /*if ((childpid = fork()) == 0) {
                 close (tcpfd); // child doesn't need it
                 tcp_handler (confd, flags);
                 close (confd);
                 exit (0);
-            }
+            }*/
             
             close (confd);
             
