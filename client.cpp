@@ -44,21 +44,10 @@ void udp_client(int argc, char *argv[]){
         }  
 		
 	// Initial UDP client.	
-	bzero(&server,sizeof(server));  
+		bzero(&server,sizeof(server));  
         server.sin_family = AF_INET;  
         server.sin_port = htons(port);  
         server.sin_addr= *((struct in_addr *)he->h_addr);  
-		
-	//Send data.
-        sendto(udpfd, argv[2],strlen(argv[2]),0,(struct sockaddr *)&server,sizeof(server));  
-        socklen_t  addrlen; 
-		
-	//Size of the server.
-        addrlen=sizeof(server);  
-	
-	//Print the buff.
-	buf[num]='\0';  
-	printf("Server Message:%s\n",buf);  
 		
 	//Create the socket.
 	udpfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -66,7 +55,6 @@ void udp_client(int argc, char *argv[]){
 
 	//Use the same sockaddr for tcp as well.
 	void tcp_client(){
-		
 	//Check whether the socket is created successfully.
 	if ((tcpfd=socket(AF_INET, SOCK_DGRAM,0))==-1) {  
 			printf("Fail to create the scoket! \n",argv[0]);  
@@ -75,13 +63,34 @@ void udp_client(int argc, char *argv[]){
 		
 	tcpfd = socket(AF_INET, SOCK_STREAM, 0);
 		
-	if (connect(tcpfd, (struct sockaddr *) &server, sizeof(server)) < 0)
+	if (connect(tcpfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
         printf("TCP connection error!\n");
+	
 }
 
-	void parallel(){
+	void parallel(int option, int argc, char *argv[]){
 	
+	struct hostent *he;
+
+    if (option == OPT_UDP){
+		//Send data.
+        sendto(udpfd, argv[2],strlen(argv[2]),0,(struct sockaddr *)&server,sizeof(server));  
+        socklen_t  addrlen; 
+		
+		//Size of the server.
+        addrlen=sizeof(server);  
 	
+		//Print the buff.
+		buf[num]='\0';  
+		printf("Server Message:%s\n",buf); 
+	
+        return;
+    }
+
+    write(tcpfd, argc, *argv[2]);
+	//Print the buff.
+	buf[num-1]='\0';  
+	printf("Server Message: %s\n",buf); 
 	}
 
 	void inteface() {
