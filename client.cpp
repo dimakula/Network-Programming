@@ -65,7 +65,7 @@ void udp_client(int argc, char *argv[]){
 }
 
 		//Use the same sockaddr for tcp as well.
-void tcp_client(){
+	void tcp_client(){
 		
 		//Check whether the socket is created successfully.
 		if ((sockfd=socket(AF_INET, SOCK_DGRAM,0))==-1) {  
@@ -79,7 +79,7 @@ void tcp_client(){
         printf("TCP connection error!\n");
 }
 
-void parallel(unsigned char *der, int *der_len, int mode){
+void parallel(){
 	
 	
 }
