@@ -29,61 +29,61 @@
 
 //Maximum the buff size as 512.
 #define MAXDATASIZE 512 
+struct hostent *he;  
+struct sockaddr_in server;  
+int udpfd;
+int tcpfd;
+int num;
+int port;
 
 void udp_client(int argc, char *argv[]){
-        struct hostent *he;  
-        struct sockaddr_in server,peer;  
-		
-		int port;
-		int sockfd, num;  
-  
-		//Check whether the socket is created successfully.
-		if ((sockfd=socket(AF_INET, SOCK_DGRAM,0))==-1) {  
+	//Check whether the socket is created successfully.
+	if ((udpfd=socket(AF_INET, SOCK_DGRAM,0))==-1) {  
 			printf("Fail to create the scoket! \n",argv[0]);  
         exit(1);  
         }  
 		
-		// Initial UDP client.	
-		bzero(&server,sizeof(server));  
+	// Initial UDP client.	
+	bzero(&server,sizeof(server));  
         server.sin_family = AF_INET;  
         server.sin_port = htons(port);  
         server.sin_addr= *((struct in_addr *)he->h_addr);  
 		
-		//Send data.
-        sendto(sockfd, argv[2],strlen(argv[2]),0,(struct sockaddr *)&server,sizeof(server));  
+	//Send data.
+        sendto(udpfd, argv[2],strlen(argv[2]),0,(struct sockaddr *)&server,sizeof(server));  
         socklen_t  addrlen; 
 		
-		//Size of the server.
+	//Size of the server.
         addrlen=sizeof(server);  
 	
-		//Print the buff.
-		buf[num]='\0';  
-		printf("Server Message:%s\n",buf);  
+	//Print the buff.
+	buf[num]='\0';  
+	printf("Server Message:%s\n",buf);  
 		
-		//Create the socket.
-		udpfd = socket(AF_INET, SOCK_DGRAM, 0);
+	//Create the socket.
+	udpfd = socket(AF_INET, SOCK_DGRAM, 0);
 }
 
-		//Use the same sockaddr for tcp as well.
+	//Use the same sockaddr for tcp as well.
 	void tcp_client(){
 		
-		//Check whether the socket is created successfully.
-		if ((sockfd=socket(AF_INET, SOCK_DGRAM,0))==-1) {  
+	//Check whether the socket is created successfully.
+	if ((tcpfd=socket(AF_INET, SOCK_DGRAM,0))==-1) {  
 			printf("Fail to create the scoket! \n",argv[0]);  
         exit(1);  
         }  
 		
-		tcpfd = socket(AF_INET, SOCK_STREAM, 0);
+	tcpfd = socket(AF_INET, SOCK_STREAM, 0);
 		
-		if (connect(tcpfd, (struct sockaddr *) &server, sizeof(server)) < 0)
+	if (connect(tcpfd, (struct sockaddr *) &server, sizeof(server)) < 0)
         printf("TCP connection error!\n");
 }
 
-void parallel(){
+	void parallel(){
 	
 	
-}
+	}
 
-void inteface() {
+	void inteface() {
 	
-}
+	}
