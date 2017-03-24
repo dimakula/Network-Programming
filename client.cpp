@@ -34,7 +34,7 @@ struct sockaddr_in server;
 int udpfd;
 int tcpfd;
 int num;
-int port;
+int tcpPort, udpPort;
 
 void udp_client(int argc, char *argv[]){
 	//Check whether the socket is created successfully.
@@ -51,7 +51,7 @@ void udp_client(int argc, char *argv[]){
 		
 	//Create the socket.
 	udpfd = socket(AF_INET, SOCK_DGRAM, 0);
-}
+	}
 
 	//Use the same sockaddr for tcp as well.
 	void tcp_client(){
@@ -66,7 +66,7 @@ void udp_client(int argc, char *argv[]){
 	if (connect(tcpfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
         printf("TCP connection error!\n");
 	
-}
+	}
 
 	void parallel(int option, int argc, char *argv[]){
 	
@@ -91,8 +91,6 @@ void udp_client(int argc, char *argv[]){
 	//Print the buff.
 	buf[num-1]='\0';  
 	printf("Server Message: %s\n",buf); 
-	}
+}
 
-	void inteface() {
-	
-	}
+
