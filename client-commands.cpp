@@ -1,18 +1,6 @@
 // GOSSIP:mBHL7IKilvdcOFKR03ASvBNX//ypQkTRUvilYmB1/OY=:2017-01-09-16-18-20-001Z:Tom eats Jerry%
 
-#include <iostream>
-#include <iomanip>
-#include <ctime>
-#include <stdio.h>      /* printf */
-#include <time.h>       /* time_t, struct tm, difftime, time, mktime */
-#include <string.h>     /* for strlen */
-#include <chrono>       /* chrono clock */
-#include <sstream>      /* stringstream */
-#include <cstring>
-#include <cstdlib>
-#include <cstdio>
-#include <unistd.h>
-#include "hash-library/sha256.h" // external hashing library
+#include "client-commands.h"
 
 using namespace std;
 
