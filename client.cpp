@@ -104,7 +104,7 @@ void promptForPeer () {
 
 int udp_client () {
 
-    int  udpfd, num, recieved;
+    int  udpfd, num, received;
     struct addrinfo hints, *servinfo, *p;
     char  buffer [MAXDATASIZE];  
 	struct sockaddr_in peer;
@@ -113,16 +113,16 @@ int udp_client () {
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
     
-    if ((recieved = getaddrinfo (host.c_str(), port.c_str(), &hints, &servinfo)) 
+    if ((received = getaddrinfo (host.c_str(), port.c_str(), &hints, &servinfo)) 
             != 0) {
-        fprintf (stderr, "Broadcast: Address does not exist\n");
+        fprintf (stderr, "UDP: Address does not exist\n");
         return -1;
     }
     
     for (p = servinfo; p != NULL; p = p->ai_next) {
         if ((udpfd = socket (p->ai_family, p->ai_socktype, p->ai_protocol))
             == -1) {
-            perror ("Broadcast");
+            perror ("UDP");
             continue;
         }
         break;
@@ -142,7 +142,7 @@ int udp_client () {
 		int totalSent = 0; 
 	    int bytes;	        
 	     
-	    printf ("sending %s\n", gossip.c_str());
+	    printf ("sending...\n");
 	    
 	    while (totalSent < data.length()) {
 	      
@@ -181,18 +181,84 @@ int udp_client () {
 //Use the same sockaddr for tcp as well.
 int tcp_client () {
 
-    int tcpfd;
-	//Check whether the socket is created successfully.
-	if ((tcpfd = socket(AF_INET, SOCK_DGRAM,0))==-1) {  
-			printf("Fail to create the socket! \n");  
-        exit(1);  
-    }  
-		
-	tcpfd = socket(AF_INET, SOCK_STREAM, 0);
-		
-	if (connect(tcpfd, (struct sockaddr *) &server, sizeof(server)) < 0) {
-        printf("TCP connection error!\n");
-	}
+   char *buffer = new char [MAXDATASIZE];
+    struct addrinfo hints, *servinfo, *p;
+    int rc;
+    int  tcpfd;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((rc = getaddrinfo(host.c_str(), port.c_str(), &hints, &servinfo)) != 0) {
+        perror ("Get address");
+        return 1;
+    }
+
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if ((tcpfd = socket(p->ai_family, p->ai_socktype,
+                p->ai_protocol)) == -1) {
+            perror("TCP: socket");
+            continue;
+        }
+
+        if (connect(tcpfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(tcpfd);
+            perror("TCP: connect");
+            continue;
+        }
+
+        break;
+    }
+
+    if (p == NULL) {
+        fprintf(stderr, "TCP: failed to connect\n");
+        return -1;
+    }
+
+    freeaddrinfo(servinfo);
+
+	printWelcomeScreen ();
+    printUsage ();
+    int command;
+    string data = fullGossipMessage (gossip, timestamp); // data to send
+	
+	do {
+		int totalSent = 0; 
+	    int bytes;	        
+	     
+	    printf ("sending...\n");
+	    
+	    while (totalSent < data.length()) {
+	      
+	        if ((bytes = send (tcpfd, data.c_str(), data.length(), 0)) == -1) {
+	            
+	            if (errno == EINTR) continue;
+	            perror ("TCP");
+	            exit (1);
+	        }
+      
+	        totalSent += bytes;
+	    }
+	    
+	    printf ("finished sending\n\n");
+	    command = printUserPrompt();
+	    
+	    if (command == OPT_GOSSIP) {
+	        printf ("Please enter new gossip message: ");
+            getline (cin, gossip);
+            data = fullGossipMessage (gossip, timestamp);
+	    
+	    } else if (command == OPT_PEER) {
+	        promptForPeer ();
+	        data = fullPeerMessage (peerName, peerIP, peerPort);    
+	    }
+	
+	} while (command != OPT_EXIT);
+
+    close(tcpfd);
+
+    return 0;
 }
 
 int getCommandLineArgs (int argc, char *argv[]) {
