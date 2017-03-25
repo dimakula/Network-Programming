@@ -19,6 +19,41 @@ int safeFork () {
     return pid;
 }
 
+#define PEERS_QUERY 20
+#define PEER_ADD 21
+#define GOSSIP_ADD 22
+#define INVALID 23
+
+int callbuffer(const char* callbuffer){
+  char* peers_query = strstr(callbuffer, "PEERS?");
+  char* peer_add = strstr(callbuffer, "PEER:");
+  char* gossip_add = strstr(callbuffer, "GOSSIP:");
+  if (peers_query && !peer_add && !gossip_add){
+    return PEERS_QUERY;
+  } else if (peer_add && !peers_query && !gossip_add){
+    return PEER_ADD;
+  } else if (gossip_add && !peers_query && !peer_add){
+    return GOSSIP_ADD;
+  }
+
+  return INVALID;
+}
+
+bool stopbuffer(char* buffer){
+  int i = 0;
+  while (buffer[i] != 0){
+    if (buffer[i] == '%' || buffer[i] == '\n')
+      return true;
+    i++;
+  }
+  return false;
+}
+
+
+
+char* buffer;
+int buffer_offset = 0;
+
 string fullGossipMessage (string gossip, string timestamp) {
     
     stringstream sstream;
