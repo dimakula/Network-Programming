@@ -17,6 +17,8 @@
 
 int safeFork ();
 
+std::string fullPeerMessage (std::string, std::string, std::string);
+
 std::string fullGossipMessage (std::string, std::string);
 
 #endif

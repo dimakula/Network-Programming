@@ -49,6 +49,8 @@ string port;
 string gossip;
 string timestamp;
 
+string peerName, peerIP, peerPort;
+
 void printWelcomeScreen () {
     printf ("welcome! You have connected to %s through port %s\n", 
             host.c_str(), port.c_str());
@@ -64,10 +66,10 @@ int printUserPrompt () {
 
     string command;
 	printf ("Gossip message sent\n");
-    printf ("Please enter next command: ");
     int flag = 0;
 	    
 	do {
+	    printf ("Please enter next command: ");
         getline (cin, command);
 	       
 	    if (command.empty()) {
@@ -85,7 +87,19 @@ int printUserPrompt () {
 	
 	} while (flag == 0);
 	
+	printf ("\n");
 	return flag; 
+}
+
+void promptForPeer () {
+
+    printf ("Enter peer name: ");
+    getline (cin, peerName);
+    printf ("\nEnter peer ip: ");
+    getline (cin, peerIP);
+    printf ("\nEnter peer port: ");
+    getline (cin, peerPort);
+    printf ("\n");
 }
 
 int udp_client () {
@@ -122,16 +136,17 @@ int udp_client () {
 	printWelcomeScreen ();
     printUsage ();
     int command;
+    string data = fullGossipMessage (gossip, timestamp); // data to send
 	
 	do {
 		int totalSent = 0; 
-	    int bytes;
+	    int bytes;	        
 	     
 	    printf ("sending %s\n", gossip.c_str());
 	    
-	    while (totalSent < gossip.length()) {
+	    while (totalSent < data.length()) {
 	      
-	        if ((bytes = sendto (udpfd, gossip.c_str(), gossip.length(), 0, 
+	        if ((bytes = sendto (udpfd, data.c_str(), data.length(), 0, 
 	                p->ai_addr, p->ai_addrlen)) == -1) {
 	            
 	            if (errno == EINTR) continue;
@@ -144,6 +159,16 @@ int udp_client () {
 	    
 	    printf ("finished sending\n\n");
 	    command = printUserPrompt();
+	    
+	    if (command == OPT_GOSSIP) {
+	        printf ("Please enter new gossip message: ");
+            getline (cin, gossip);
+            data = fullGossipMessage (gossip, timestamp);
+	    
+	    } else if (command == OPT_PEER) {
+	        promptForPeer ();
+	        data = fullPeerMessage (peerName, peerIP, peerPort);    
+	    }
 	
 	} while (command != OPT_EXIT);
 	
@@ -191,11 +216,7 @@ int getCommandLineArgs (int argc, char *argv[]) {
         }
     }
     
-    if (flags == OPT_UDP | OPT_TCP) {
-        fprintf (stderr, "You can't do both TCP and UDP!\n");
-        exit(1);
-    
-    } else if (flags == 0) {
+    if (flags == 0) {
         fprintf (stderr, "Please specify the protocol to use (-T for TCP, -U for UDP)\n");
         exit(1);
     }
