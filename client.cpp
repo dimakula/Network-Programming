@@ -29,6 +29,7 @@
 #include <string>
 #include <iostream>
 #include <errno.h>
+#include "client-commands.h"
 
 using namespace std;
 
