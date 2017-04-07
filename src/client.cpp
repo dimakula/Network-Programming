@@ -336,6 +336,22 @@ int MessageEncode(char *message, char *thisString) {
 		//timestamp GeneralizedTime,
 		//message UTF8String
 		//}
+		result = asn1_create_element(definitions, "ApplicationList.Application", &node );
+
+		strcpy(time, list.at( 1 ).c_str() );
+		strcpy(descriptio, list.at( 2 ).c_str() );
+		strcpy(name, list.at( 3 ).c_str() );
+
+		result = asn1_write_value(node, "time", time, 1);
+		result = asn1_write_value(node, "name", name, strlen());
+		result = asn1_write_value(node, "description", description, strlen(description));
+
+		result = asn1_der_coding (node, "", dataBuff, &MAXDATASIZE, errorDescription);
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Encoding error = \"%s\"\n", errorDescription);
+			//return -1;
+		}
 		case 2:
 		//Peer ::= [APPLICATION 2] IMPLICIT SEQUENCE {
 		//name UTF8String, 
