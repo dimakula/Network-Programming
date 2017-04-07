@@ -306,12 +306,13 @@ int MessageEncode(char *message, char *thisString) {
 	
 	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
 	char time[MAXDATASIZE];
-	char description[MAXDATASIZE];
+	char message[MAXDATASIZE];
 	char name[MAXDATASIZE];
 	char ip[MAXDATASIZE];
 	//What else we need to show?
 	
 	int result = 0;
+	int size;
 	
 	//Three Applications required, which means 3 cases.
 	
@@ -336,37 +337,61 @@ int MessageEncode(char *message, char *thisString) {
 		//timestamp GeneralizedTime,
 		//message UTF8String
 		//}
-		result = asn1_create_element(definitions, "ApplicationList.Application", &node );
+		result = asn1_create_element(definitions, "ApplicationList.Request1", &node);
+		
+		strcpy(name, appList.at(1).c_str() );
+		strcpy(time, appList.at(2).c_str() );
+		strcpy(message, appList.at(3).c_str() );
+		
 
-		strcpy(time, list.at( 1 ).c_str() );
-		strcpy(description, list.at( 2 ).c_str() );
-		strcpy(name, list.at( 3 ).c_str() );
-
-		result = asn1_write_value(node, "time", time, 1);
-		result = asn1_write_value(node, "name", name, strlen());
-		result = asn1_write_value(node, "description", description, strlen(description));
-
-		result = asn1_der_coding (node, "", dataBuff, &MAXDATASIZE, errorDescription);
+		result = asn1_write_value(node, "name", name, 1);
+		result = asn1_write_value(node, "time", time, strlen());
+		result = asn1_write_value(node, "message", message, strlen(message));
+		
+		size = MAXDATASIZE;
+		
+		result = asn1_der_coding (node, "", dataBuff, &size, errorDescription);
 		if(result != ASN1_SUCCESS) {
 			asn1_perror (result);
 			printf("Encoding error = \"%s\"\n", errorDescription);
 		}
+		break;
+		
 		case 2:
 		//Peer ::= [APPLICATION 2] IMPLICIT SEQUENCE {
 		//name UTF8String, 
 		//port INTEGER, 
 		//ip PrintableString
 		//}
-		result = asn1_create_element(definitions, "ApplicationList.Request", &node );
-        
+		result = asn1_create_element(definitions, "ApplicationList.Request2", &node);
+        strcpy(name, appList.at(1).c_str());
+		strcpy(port, appList.at(2).c_str());
+		strcpy(ip, appList.at(3).c_str())
+
+		result = asn1_write_value(node, "name", name, 1);
+		result = asn1_write_value(node, "port", port, strlen());
+		result = asn1_write_value(node, "ip", ip, strlen(ip));
+		
+		size = MAXDATASIZE;
+		
+		result = asn1_der_coding (node, "", dataBuff, &size, errorDescription);
 		if(result != ASN1_SUCCESS) {
 			asn1_perror (result);
 			printf("Encoding error = \"%s\"\n", errorDescription);
 			return -1;
 		}
+		break;
+		
 		case 3:
 		//PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
+		result = asn1_create_element(definitions, "ApplicationList.Request3", &node);
+		strcpy(NULL, appList.at(1).c_str());
 		
+		result = asn1_write_value(node, "NULL", NULL, 1);
+		
+		size = MAXDATASIZE;
+		
+		result = asn1_der_coding (node, "", dataBuff, &size, errorDescription);
 		if(result != ASN1_SUCCESS) {
 			asn1_perror (result);
 			printf("Encoding error = \"%s\"\n", errorDescription);
@@ -376,6 +401,8 @@ int MessageEncode(char *message, char *thisString) {
 	
 	asn1_delete_structure (&node);
 	asn1_delete_structure (&definitions);
+	
+	return size;
 }
 
 int main (int argc, char *argv[]) {
