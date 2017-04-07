@@ -588,12 +588,12 @@ int main (int argc, char *argv[]) {
     ufds[1].fd = udpfd;
     ufds[1].events = POLLIN;
     int flags;
+    int timeout = 20000; // 20 second timeout for poll, -1 for no timeout
 
     // start persistent server
     for ( ; ; ) {
         char *buffer = new char[MAXLINE];
-        // -1 means no timeouts occur, ever
-        if ((nready = poll(ufds, 2, -1)) < 0) {     
+        if ((nready = poll(ufds, 2, timeout)) < 0) {     
             //if (errno = EINTR) continue; // don't want signals to create interrupts
             perror("Poll");
             break;

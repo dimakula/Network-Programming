@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <unistd.h>
 #include "../lib/hash-library/sha256.h" // external hashing library
+#include <libtasn1.h>
 
 std::string fullPeerMessage (std::string, std::string, std::string);
 
