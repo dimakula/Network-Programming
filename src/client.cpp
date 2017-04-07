@@ -321,10 +321,10 @@ int MessageEncode(char *message, char *thisString) {
 	if (appList.at(0).compare("APPLICATION_DEFINITION") == 0) {
 		tag = 1;
 	}
-	if (applist.at(0).compare("SECOND_APPLICATION") == 0) {
+	if (appList.at(0).compare("SECOND_APPLICATION") == 0) {
 		tag = 2;
 	}
-	else if (applist.at(0).compare("LAST_APPLICATION") == 0) {
+	else if (appList.at(0).compare("LAST_APPLICATION") == 0) {
 		tag = 3;
 	}
 	
