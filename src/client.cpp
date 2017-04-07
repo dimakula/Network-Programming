@@ -294,10 +294,10 @@ int MessageEncode(char *message, char *thisString) {
 	
 	vector<string> appList;
 
-	thisString = strtok ((char *)cmd.c_str(),";");
+	thisString = strtok ((char *)cmd.c_str(),":");
 	while (thisString != NULL){
 		appList.push_back(thisString);
-		thisString = strtok (NULL, ";");
+		thisString = strtok (NULL, ":");
 	}
 	return appList;	
 	
@@ -339,7 +339,7 @@ int MessageEncode(char *message, char *thisString) {
 		result = asn1_create_element(definitions, "ApplicationList.Application", &node );
 
 		strcpy(time, list.at( 1 ).c_str() );
-		strcpy(descriptio, list.at( 2 ).c_str() );
+		strcpy(description, list.at( 2 ).c_str() );
 		strcpy(name, list.at( 3 ).c_str() );
 
 		result = asn1_write_value(node, "time", time, 1);
@@ -350,7 +350,6 @@ int MessageEncode(char *message, char *thisString) {
 		if(result != ASN1_SUCCESS) {
 			asn1_perror (result);
 			printf("Encoding error = \"%s\"\n", errorDescription);
-			//return -1;
 		}
 		case 2:
 		//Peer ::= [APPLICATION 2] IMPLICIT SEQUENCE {
@@ -358,8 +357,21 @@ int MessageEncode(char *message, char *thisString) {
 		//port INTEGER, 
 		//ip PrintableString
 		//}
+		result = asn1_create_element(definitions, "ApplicationList.Request", &node );
+        
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Encoding error = \"%s\"\n", errorDescription);
+			return -1;
+		}
 		case 3:
 		//PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
+		
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Encoding error = \"%s\"\n", errorDescription);
+			return -1;
+		}break;
 	}
 	
 	asn1_delete_structure (&node);
