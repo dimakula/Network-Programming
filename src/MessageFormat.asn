@@ -1,0 +1,23 @@
+MessageFormat DEFINITIONS IMPLICIT TAGS ::= BEGIN
+
+    Gossip ::= [APPLICATION 1] EXPLICIT SEQUENCE {
+		sha256hash OCTET STRING,
+		timestamp GeneralizedTime,
+		message UTF8String
+		}
+
+    Peer ::= [APPLICATION 2] IMPLICIT SEQUENCE {
+		name UTF8String, 
+		port INTEGER, 
+		ip PrintableString
+		}
+    
+	PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
+	
+    PeersAnswer ::= [1] EXPLICIT SEQUENCE OF Peer
+    
+	UTF8String ::= [UNIVERSAL 12] IMPLICIT OCTET STRING
+    
+	PrintableString ::= [UNIVERSAL 19] IMPLICIT OCTET STRING
+
+END
