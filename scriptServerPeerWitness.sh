@@ -1,0 +1,3 @@
+echo Connecting to 127.0.0.1 port 8081...
+ncat -l 127.0.0.1 8081 -u
+
