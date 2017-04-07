@@ -290,6 +290,127 @@ int getCommandLineArgs (int argc, char *argv[]) {
     return flags;  
 }
 
+int MessageEncode(char *message, char *thisString) {
+	
+	vector<string> appList;
+
+	thisString = strtok ((char *)cmd.c_str(),";");
+	while (thisString != NULL){
+		appList.push_back(thisString);
+		thisString = strtok (NULL, ";");
+	}
+	return appList;	
+	
+	an1_node definitions = NULL;
+	node = NULL;
+	
+	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+	char time[MAXDATASIZE];
+	char description[MAXDATASIZE];
+	char name[MAXDATASIZE];
+	char ip[MAXDATASIZE];
+	//What else we need to show?
+	
+	int result = 0;
+	
+	//Three Applications required, which means 3 cases.
+	
+	int tag = -1;
+	vector<string> appList = parseCommand(message);
+	if (appList.at(0).compare("APPLICATION_DEFINITION") == 0) {
+		tag = 1;
+	}
+	if (applist.at(0).compare("SECOND_APPLICATION") == 0) {
+		tag = 2;
+	}
+	else if (applist.at(0).compare("LAST_APPLICATION") == 0) {
+		tag = 3;
+	}
+	
+	result = asn1_parser2tree ("ApplicationList.asn", &definitions, errorDescription);
+	
+	switch(tag) {
+		case 1:
+		//Gossip ::= [APPLICATION 1] EXPLICIT SEQUENCE {
+		//sha256hash OCTET STRING,
+		//timestamp GeneralizedTime,
+		//message UTF8String
+		//}
+		case 2:
+		//Peer ::= [APPLICATION 2] IMPLICIT SEQUENCE {
+		//name UTF8String, 
+		//port INTEGER, 
+		//ip PrintableString
+		//}
+		case 3:
+		//PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
+	}
+	
+	asn1_delete_structure (&node);
+	asn1_delete_structure (&definitions);
+}
+
+/*
+
+
+	switch(tag){
+	case 1:
+		//	Event ::= [1] SEQUENCE {
+		//		time GeneralizedTime,
+		//		group UTF8String,
+		//		description UTF8String
+		//	}
+		// "EVENT_DEFINITION;2015-03-12:18h30m00s001Z;Meeting with the user.;CSE5232"
+		result = asn1_create_element(definitions, "EventProtocol.Event", &node );
+
+		strcpy( tmp_time ,  list.at( 1 ).c_str() );
+		strcpy( tmp_description ,  list.at( 2 ).c_str() );
+		strcpy( tmp_group ,  list.at( 3 ).c_str() );
+
+		result = asn1_write_value(node, "time", tmp_time, 1);
+		result = asn1_write_value(node, "group", tmp_group, strlen(tmp_group));
+		result = asn1_write_value(node, "description", tmp_description, strlen(tmp_description));
+
+		len = DATA_SIZE;
+		result = asn1_der_coding (node, "", dataBuff, &len, errorDescription);
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Encoding error = \"%s\"\n", errorDescription);
+			//return -1;
+		}
+		break;
+	case 2:
+		//	Request ::= [2] SEQUENCE {
+		//		group UTF8String,
+		//		afterTime GeneralizedTime
+		//	}
+
+		// "GET_NEXT_EVENTS;CSE5232;2015-03-12:18h30m00s000Z"
+		result = asn1_create_element(definitions, "EventProtocol.Request", &node );
+
+		strcpy( tmp_group ,  list.at( 1 ).c_str() );
+		strcpy( tmp_time ,  list.at( 2 ).c_str() );
+
+		result = asn1_write_value(node, "group", tmp_group, strlen(tmp_group));
+		result = asn1_write_value(node, "afterTime", tmp_time, 1);
+
+		len = DATA_SIZE;
+		result = asn1_der_coding (node, "", dataBuff, &len, errorDescription);
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Encoding error = \"%s\"\n", errorDescription);
+			return -1;
+		}
+		break;
+	}
+
+	asn1_delete_structure (&node);
+	asn1_delete_structure (&definitions);
+
+	return len;
+}
+*/
+
 int main (int argc, char *argv[]) {
     
     int flag = getCommandLineArgs (argc, argv);
