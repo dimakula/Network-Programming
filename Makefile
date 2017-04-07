@@ -1,13 +1,24 @@
-CC=g++
-FLAGS=-lsqlite3 -w -std=c++11 -lpthread
+CXXFLAGS += -std=c++11 -w
+LDFLAGS += -lsqlite3 -lpthread
+
+.PHONY: all clean hash-library debug
 
 all: server client
 
-server: server.cpp
-	$(CC) -o server server.cpp $(FLAGS)
+server:
+	$(CXX) -o bin/server.o src/server.cpp $(CXXFLAGS) $(LDFLAGS)
 
-client: client.cpp client-commands.cpp
-	$(CC) -o client client.cpp client-commands.cpp hash-library/sha256.cpp $(FLAGS)
+client: client-commands
+	$(CXX) -o bin/client.o src/client.cpp build/client-commands.o build/sha256.o  $(CXXFLAGS)
 
-Debug:
-	$(CC) -o server server.cpp $(FLAGS) -g
+client-commands: hash-library
+	$(CXX) -o build/client-commands.o -c src/client-commands.cpp $(CXXFLAGS)
+
+hash-library:
+	$(CXX) -o build/sha256.o -c lib/hash-library/sha256.cpp $(CXXFLAGS)
+
+debug:
+	$(CXX) -o bin/server.o src/server.cpp $(CXXFLAGS) -g
+
+clean:
+	rm bin/* build/*
