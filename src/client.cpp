@@ -350,67 +350,6 @@ int MessageEncode(char *message, char *thisString) {
 	asn1_delete_structure (&definitions);
 }
 
-/*
-
-
-	switch(tag){
-	case 1:
-		//	Event ::= [1] SEQUENCE {
-		//		time GeneralizedTime,
-		//		group UTF8String,
-		//		description UTF8String
-		//	}
-		// "EVENT_DEFINITION;2015-03-12:18h30m00s001Z;Meeting with the user.;CSE5232"
-		result = asn1_create_element(definitions, "EventProtocol.Event", &node );
-
-		strcpy( tmp_time ,  list.at( 1 ).c_str() );
-		strcpy( tmp_description ,  list.at( 2 ).c_str() );
-		strcpy( tmp_group ,  list.at( 3 ).c_str() );
-
-		result = asn1_write_value(node, "time", tmp_time, 1);
-		result = asn1_write_value(node, "group", tmp_group, strlen(tmp_group));
-		result = asn1_write_value(node, "description", tmp_description, strlen(tmp_description));
-
-		len = DATA_SIZE;
-		result = asn1_der_coding (node, "", dataBuff, &len, errorDescription);
-		if(result != ASN1_SUCCESS) {
-			asn1_perror (result);
-			printf("Encoding error = \"%s\"\n", errorDescription);
-			//return -1;
-		}
-		break;
-	case 2:
-		//	Request ::= [2] SEQUENCE {
-		//		group UTF8String,
-		//		afterTime GeneralizedTime
-		//	}
-
-		// "GET_NEXT_EVENTS;CSE5232;2015-03-12:18h30m00s000Z"
-		result = asn1_create_element(definitions, "EventProtocol.Request", &node );
-
-		strcpy( tmp_group ,  list.at( 1 ).c_str() );
-		strcpy( tmp_time ,  list.at( 2 ).c_str() );
-
-		result = asn1_write_value(node, "group", tmp_group, strlen(tmp_group));
-		result = asn1_write_value(node, "afterTime", tmp_time, 1);
-
-		len = DATA_SIZE;
-		result = asn1_der_coding (node, "", dataBuff, &len, errorDescription);
-		if(result != ASN1_SUCCESS) {
-			asn1_perror (result);
-			printf("Encoding error = \"%s\"\n", errorDescription);
-			return -1;
-		}
-		break;
-	}
-
-	asn1_delete_structure (&node);
-	asn1_delete_structure (&definitions);
-
-	return len;
-}
-*/
-
 int main (int argc, char *argv[]) {
     
     int flag = getCommandLineArgs (argc, argv);
