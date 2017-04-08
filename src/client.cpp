@@ -290,7 +290,7 @@ int getCommandLineArgs (int argc, char *argv[]) {
     return flags;  
 }
 
-int MessageEncode(char *message, char *thisString) {
+/*int MessageEncode(char *message, char *thisString) {
 	
 	vector<string> appList;
 
@@ -301,7 +301,7 @@ int MessageEncode(char *message, char *thisString) {
 	}
 	return appList;	
 	
-	an1_node definitions = NULL;
+	asn1_node definitions = NULL;
 	node = NULL;
 	
 	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
@@ -403,10 +403,11 @@ int MessageEncode(char *message, char *thisString) {
 	asn1_delete_structure (&definitions);
 	
 	return size;
-}
+}*/
 
 int main (int argc, char *argv[]) {
     
+    init_parseTree(); // initialise parse tree for asn1 encoding
     int flag = getCommandLineArgs (argc, argv);
     
     if (flag == OPT_UDP)

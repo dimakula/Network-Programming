@@ -40,6 +40,7 @@
 #include <pthread.h>
 #include <sys/ioctl.h>
 #include <mutex> // for locks to prevent threads from writing to db at the same time
+#include <libtasn1.h>
 
 ///////////////////////////
 //Thread argument structs//
@@ -74,6 +75,8 @@ void broadcastGossip(char *);
 // Parses the user commands and stores them in an sqlite3
 // database
 char* reader (char *, int &);
+
+char* asn1_reader (char *, int &);
 
 //handler for the tcp socket
 void* tcp_handler ( void* );

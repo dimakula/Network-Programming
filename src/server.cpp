@@ -45,6 +45,10 @@ string latestGossip;
 // Prevents threads from writing to the database at the same time
 mutex database_mutex;
 
+asn1_node definitions = NULL;
+
+
+
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
     fprintf (stderr, "Cancelling server, closing all file handlers\n");
@@ -301,6 +305,11 @@ char *reader (char *buffer, int &offset) {
     return (char *)output;
 }
 
+char *asn1_reader (char *buffer, int &offset) {
+   
+    
+}
+
 //handler for the tcp socket
 void* tcp_handler (void *threadArgs) {
 
@@ -432,7 +441,6 @@ void sig_child (int signo) {
     errno = saved_errno;
 }
 
-
 // sets up sqlite database for storing gossip
 void setup_database (char *filePath) {
 
@@ -463,7 +471,6 @@ void setup_database (char *filePath) {
         sqlite3_free (zErrMsg);
     }  
 }
-
 
 int main (int argc, char *argv[]) {
     // execute signal_stop method upon receiving control-c or control-z commands
@@ -507,6 +514,13 @@ int main (int argc, char *argv[]) {
 
     int numThreads = 0; // current number of threads active
     pthread_t threadID; // current threadID, not used for anything
+    
+    // generate asn1 definitions
+    char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+    /*if ((rc = asn1 parser2tree ("ApplicationList.asn", &definitions, errorDescription))
+            != ASN1_SUCCESS) {
+            asn1_perror(rc);
+    }*/
  
     // get tcp socket descriptor
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {

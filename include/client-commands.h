@@ -16,6 +16,16 @@
 #include "../lib/hash-library/sha256.h" // external hashing library
 #include <libtasn1.h>
 
+int init_parseTree ();
+
+int timestampAndHash (std::string, std::string &, std::string &);
+
+int PeersEncode ();
+
+int PeerEncode(char*, char*, char*);
+
+int MessageEncode(char*, char*);
+
 std::string fullPeerMessage (std::string, std::string, std::string);
 
 std::string fullGossipMessage (std::string, std::string);
