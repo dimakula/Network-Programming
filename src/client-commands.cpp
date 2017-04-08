@@ -25,7 +25,7 @@ int init_parseTree () {
     return 0;
 }
 
-int timestampAndHash (char *gossip, char const *timestamp, string &sha256) {
+int timestampAndHash (char *gossip, char const *timestamp, string &shaString) {
 
     stringstream sstream;
     string temp;
@@ -53,11 +53,12 @@ int timestampAndHash (char *gossip, char const *timestamp, string &sha256) {
         sstream << timestamp;
     }
        
+    SHA256 sha256;
     sstream << ":" << gossip;
     timestampAndMessage = sstream.str();
     sstream.str(string());
-    sstream << "" << sha256 (timestampAndMessage);
-    sha256 = sstream.str();
+    sstream << sha256 (timestampAndMessage);
+    shaString = sstream.str();
     
     return 0;
 }
@@ -65,7 +66,7 @@ int timestampAndHash (char *gossip, char const *timestamp, string &sha256) {
 int PeersEncode () {
 
 	//PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
-	result = asn1_create_element(definitions, "ApplicationList.Request3", structure);
+	result = asn1_create_element(definitions, "ApplicationList.Request3", &structure);
 		
 	result = asn1_write_value(structure, "NULL", NULL, 1);
 		
@@ -86,7 +87,7 @@ int PeersEncode () {
 
 int PeerEncode(char *peer, char *ip, char *port) {
     
-    if ((result = asn1_create_element(definitions, "ApplicationList.Request1", structure)) != 1)
+    if ((result = asn1_create_element(definitions, "ApplicationList.Request1", &structure)) != 1)
         asn1_perror (result);
 		
 	if ((result = asn1_write_value(structure, "name", peer, strlen (peer))) != ASN1_SUCCESS) 
@@ -129,8 +130,8 @@ int MessageEncode(char *gossip, char *timestamp) {
 	
 	timestampAndHash (gossip, timestamp, sha256);
 
-	result = asn1_write_value(structure, "sha256hash", sha256, strlen(sha256));
-	result = asn1_write_value(structure, "time", time, strlen(time));
+	result = asn1_write_value(structure, "sha256hash", sha256.c_str(), strlen(sha256.c_str()));
+	result = asn1_write_value(structure, "time", timestamp, strlen(timestamp));
 	result = asn1_write_value(structure, "message", gossip, strlen(gossip));
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
