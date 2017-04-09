@@ -405,6 +405,108 @@ int getCommandLineArgs (int argc, char *argv[]) {
 	return size;
 }*/
 
+/*
+string MessageDecode (int size){
+
+	asn1_node definitions = NULL;
+	node = NULL;
+	
+	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+
+	char time[MAXDATASIZE];
+	char name[MAXDATASIZE];
+	char message[MAXDATASIZE];
+	int result = 0;
+	char sb[MAXDATASIZE];
+
+	result = asn1_array2tree (EventProtocol_asn1_tab, &definitions, errorDescription);
+
+	unsigned char userNum[100];
+	int x;
+	unsigned long tag;
+	result = asn1_get_tag_der((const unsigned char *)dataBuff, size, userNum, &x, &tag);
+	if(result != ASN1_SUCCESS) {
+		asn1_perror (result);
+		printf("TAG error = \"%s\"\n", errorDescription);
+	}
+
+	switch(tag){
+	case 1: 
+		result = asn1_create_element(definitions, "ApplicationList.Request1", &node );
+		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
+
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Decoding error = \"%s\"\n", errorDescription);
+			break;
+		}
+
+		printf("{APPLICATION} recieved..\n");
+		size = MAXDATASIZE;
+		result = asn1_read_value(node, "name", name, &size);
+		printf("\tName=\"%s\"\n", name);
+
+		size = MAXDATASIZE;
+		result = asn1_read_value(node, "time", time, &size);
+		printf("\tTime=\"%s\"\n", time);
+
+		size = MAXDATASIZE;
+		result = asn1_read_value(node, "description", message, &size);
+		printf("\tMessage=\"%s\"\n", message);
+
+		sprintf(sb, "APPLICATION;%s;%s;%s", time, message, name);
+
+		break;
+	case 2:	
+		result = asn1_create_element(definitions, "ApplicationList.Request2", &node );
+		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
+
+		if(result != ASN1_SUCCESS)  {
+			asn1_perror (result);
+			printf("Decoding error = \"%s\"\n", errorDescription);
+			break;
+		}
+
+		printf("{APPLICATION} recieved..\n");
+		size = MAXDATASIZE;
+		result = asn1_read_value(node, "afterTime", time, &size);
+		printf("\tTime=\"%s\"\n", time);
+
+		size = MAXDATASIZE;
+		result = asn1_read_value(node, "name", name, &size);
+		printf("\tName=\"%s\"\n", name);
+
+		sprintf(sb, "APPLICATION 2;%s;%s", name, time);
+
+		break;
+	case 3: 
+			result = asn1_create_element(definitions, "ApplicationList.Request3", &node );
+		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
+
+		if(result != ASN1_SUCCESS)  {
+			asn1_perror (result);
+			printf("Decoding error = \"%s\"\n", errorDescription);
+			break;
+		}
+
+		printf("{APPLICATION} recieved..\n");
+
+		size = MAXDATASIZE;
+		result = asn1_read_value(node, "name", name, &size);
+		printf("\tName=\"%s\"\n", name);
+		sprintf(sb, "APPLICATION;%s", name);
+
+		break;
+
+	}
+	asn1_delete_structure (&node);
+	asn1_delete_structure (&definitions);
+
+	string stb = sb;
+	return stb;
+}
+*/
+
 int main (int argc, char *argv[]) {
     
     init_parseTree(); // initialise parse tree for asn1 encoding
