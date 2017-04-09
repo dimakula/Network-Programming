@@ -88,7 +88,7 @@ string MessageDecode (int size) {
 
 	switch(tag){
 	case 1: 
-		result = asn1_create_element(definitions, "ApplicationList.Request1", &node );
+		result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
 		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
 
 		if(result != ASN1_SUCCESS) {
@@ -114,7 +114,7 @@ string MessageDecode (int size) {
 
 		break;
 	case 2:	
-		result = asn1_create_element(definitions, "ApplicationList.Request2", &node );
+		result = asn1_create_element(definitions, "ApplicationList.Peer", &node );
 		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
 
 		if(result != ASN1_SUCCESS)  {
@@ -132,11 +132,11 @@ string MessageDecode (int size) {
 		result = asn1_read_value(node, "name", name, &size);
 		printf("\tName=\"%s\"\n", name);
 
-		sprintf(sb, "APPLICATION 2;%s;%s", name, time);
+		sprintf(sb, "APPLICATION;%s;%s", name, time);
 
 		break;
 	case 3: 
-			result = asn1_create_element(definitions, "ApplicationList.Request3", &node );
+			result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
 		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
 
 		if(result != ASN1_SUCCESS)  {
