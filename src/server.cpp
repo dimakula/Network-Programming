@@ -60,21 +60,22 @@ void signal_stop (int a) {
     exit (1);
 }
 
-/*
-string MessageDecode (int size){
+
+string MessageDecode (int size) {
 
 	asn1_node definitions = NULL;
-	node = NULL;
+	asn1_node node = NULL;
 	
 	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
 
-	char time[MAXDATASIZE];
-	char name[MAXDATASIZE];
-	char message[MAXDATASIZE];
+	char time[MAXLINE];
+	char name[MAXLINE];
+	char message[MAXLINE];
 	int result = 0;
-	char sb[MAXDATASIZE];
+	char sb[MAXLINE];
+	char *dataBuff = new char[MAXLINE];
 
-	result = asn1_array2tree (EventProtocol_asn1_tab, &definitions, errorDescription);
+	result = asn1_parser2tree ("ApplicationList_asn1_tab.c", &definitions, errorDescription);
 
 	unsigned char userNum[100];
 	int x;
@@ -97,15 +98,15 @@ string MessageDecode (int size){
 		}
 
 		printf("{APPLICATION} recieved..\n");
-		size = MAXDATASIZE;
+		size = MAXLINE;
 		result = asn1_read_value(node, "name", name, &size);
 		printf("\tName=\"%s\"\n", name);
 
-		size = MAXDATASIZE;
+		size = MAXLINE;
 		result = asn1_read_value(node, "time", time, &size);
 		printf("\tTime=\"%s\"\n", time);
 
-		size = MAXDATASIZE;
+		size = MAXLINE;
 		result = asn1_read_value(node, "description", message, &size);
 		printf("\tMessage=\"%s\"\n", message);
 
@@ -123,11 +124,11 @@ string MessageDecode (int size){
 		}
 
 		printf("{APPLICATION} recieved..\n");
-		size = MAXDATASIZE;
+		size = MAXLINE;
 		result = asn1_read_value(node, "afterTime", time, &size);
 		printf("\tTime=\"%s\"\n", time);
 
-		size = MAXDATASIZE;
+		size = MAXLINE;
 		result = asn1_read_value(node, "name", name, &size);
 		printf("\tName=\"%s\"\n", name);
 
@@ -146,7 +147,7 @@ string MessageDecode (int size){
 
 		printf("{APPLICATION} recieved..\n");
 
-		size = MAXDATASIZE;
+		size = MAXLINE;
 		result = asn1_read_value(node, "name", name, &size);
 		printf("\tName=\"%s\"\n", name);
 		sprintf(sb, "APPLICATION;%s", name);
@@ -160,7 +161,7 @@ string MessageDecode (int size){
 	string stb = sb;
 	return stb;
 }
-*/
+
 
 // counts the number of peers known
 static int peers;

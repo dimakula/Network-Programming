@@ -1,4 +1,4 @@
-CXXFLAGS += -std=c++11 -w
+CXXFLAGS += -std=c++11 -w -ltasn1
 LDFLAGS += -lsqlite3 -lpthread
 
 .PHONY: all clean hash-library debug
@@ -9,7 +9,7 @@ server:
 	$(CXX) -o bin/server.o src/server.cpp $(CXXFLAGS) $(LDFLAGS)
 
 client: client-commands
-	$(CXX) -o bin/client.o src/client.cpp build/client-commands.o build/sha256.o -ltasn1  $(CXXFLAGS)
+	$(CXX) -o bin/client.o src/client.cpp build/client-commands.o build/sha256.o $(CXXFLAGS)
 
 client-commands: hash-library
 	$(CXX) -o build/client-commands.o -c src/client-commands.cpp $(CXXFLAGS)
