@@ -25,14 +25,15 @@ int init_parseTree () {
     return 0;
 }
 
-int timestampAndHash (char *gossip, char const *timestamp, string &shaString) {
+int timestampAndHash (string gossip, string &timestamp, string &shaString) {
 
     stringstream sstream;
     string temp;
     string timestampAndMessage;
+    char *returnTime;
     
     // Create timestamp from current time if no timestamp was provided
-    if (timestamp[0] == '\0') {       
+    if (!timestamp.empty()) {       
 
         typedef chrono::system_clock clock;
 
@@ -46,8 +47,7 @@ int timestampAndHash (char *gossip, char const *timestamp, string &shaString) {
         time_t time = chrono::system_clock::to_time_t (now);
         sstream << put_time(localtime(&time), "%F-%H-%M-%S-");
         sstream << milliseconds.count() << "Z";
-        temp = sstream.str();
-        timestamp = temp.c_str();
+        timestamp = sstream.str();
     
     } else {
         sstream << timestamp;
@@ -85,16 +85,16 @@ int PeersEncode () {
 	return 0;
 }
 
-int PeerEncode(char *peer, char *ip, char *port) {
+int PeerEncode(string peer, string ip, string port) {
     
     if ((result = asn1_create_element(definitions, "ApplicationList.Request1", &structure)) != 1)
         asn1_perror (result);
 		
-	if ((result = asn1_write_value(structure, "name", peer, strlen (peer))) != ASN1_SUCCESS) 
+	if ((result = asn1_write_value(structure, "name", peer.c_str(), peer.length())) != ASN1_SUCCESS) 
 	    asn1_perror (result);
-	if ((result = asn1_write_value(structure, "port", port, strlen (port))) != ASN1_SUCCESS)
+	if ((result = asn1_write_value(structure, "port", port.c_str(), port.length())) != ASN1_SUCCESS)
 	    asn1_perror (result);
-	if ((result = asn1_write_value(structure, "ip",   ip,   strlen (ip)))   != ASN1_SUCCESS)
+	if ((result = asn1_write_value(structure, "ip",   ip.c_str(),   ip.length()))   != ASN1_SUCCESS)
 	    asn1_perror (result);
 	
 	int size = MAXLINE;
@@ -113,7 +113,7 @@ int PeerEncode(char *peer, char *ip, char *port) {
 }
 
 
-int MessageEncode(char *gossip, char *timestamp) {
+int MessageEncode(string gossip, string timestamp) {
 	
 	char *dataBuff = new char[MAXLINE];
 	
@@ -130,9 +130,9 @@ int MessageEncode(char *gossip, char *timestamp) {
 	
 	timestampAndHash (gossip, timestamp, sha256);
 
-	result = asn1_write_value(structure, "sha256hash", sha256.c_str(), strlen(sha256.c_str()));
-	result = asn1_write_value(structure, "time", timestamp, strlen(timestamp));
-	result = asn1_write_value(structure, "message", gossip, strlen(gossip));
+	result = asn1_write_value(structure, "sha256hash", sha256.c_str(), sha256.length());
+	result = asn1_write_value(structure, "time", timestamp.c_str(), timestamp.length());
+	result = asn1_write_value(structure, "message", gossip.c_str(), gossip.length());
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	//asn1_delete_structure (structure);
@@ -160,7 +160,16 @@ string fullGossipMessage (string gossip, string timestamp) {
     stringstream sstream;
     char *buffer = new char [MAXLINE];
     string timestampAndMessage;
+    string sha256;
     
+    timestampAndHash (gossip, timestamp, sha256);
+    
+    sstream << "GOSSIP:" << sha256 << ":" << timestamp << ":" << gossip << "%";
+    string fullMessage = sstream.str();
+    printf ("%s\n", fullMessage.c_str());
+    
+    return fullMessage;
+    /*
     // Create timestamp from current time if no timestamp was provided
     if (timestamp.empty()) {       
 
@@ -189,11 +198,7 @@ string fullGossipMessage (string gossip, string timestamp) {
     sstream.str(string());
     sstream << "GOSSIP:" << sha256 (timestampAndMessage); 
     sstream << ":" << timestampAndMessage << "%";
-    
-    string fullMessage = sstream.str();
-    printf ("%s\n", fullMessage.c_str());
-    
-    return fullMessage;
+    */
 }
 
 

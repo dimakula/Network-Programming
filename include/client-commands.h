@@ -24,7 +24,7 @@ int PeersEncode ();
 
 int PeerEncode(char*, char*, char*);
 
-int MessageEncode(char*, char*);
+int MessageEncode(std::string, std::string);
 
 std::string fullPeerMessage (std::string, std::string, std::string);
 
