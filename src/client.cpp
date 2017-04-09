@@ -405,6 +405,111 @@ int getCommandLineArgs (int argc, char *argv[]) {
 	return size;
 }*/
 
+void MessageDecode (int size, int tag){
+
+	asn1_node definitions = NULL;
+	asn1_node node = NULL;
+	
+	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+
+	char time[MAXLINE];
+	char name[MAXLINE];
+	char message[MAXLINE];
+	
+	int result = 0;
+	
+	char sb[MAXLINE];
+	char *dataBuff = new char[MAXLINE];
+	
+	int codeNum=0;
+
+	result = asn1_parser2tree ("ApplicationList_asn1_tab.c", &definitions, errorDescription);
+
+	switch(tag){
+	
+	case 1:
+		result = asn1_create_element(definitions, "ApplicationList.Peer", &node);
+		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
+
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Decoding error = \"%s\"\n", errorDescription);
+			break;
+		}
+
+		char code[MAXLINE];
+		result = asn1_read_value(node, "code", code, &size);
+		codeNum = atoi(code);
+		printf("Server response recieved..\n");
+		printf("Code = %d [%s]\n", codeNum, (codeNum==100)?"Peer":"error");
+		break;
+		
+	case 2:	
+		result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node);
+		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
+
+		if(result != ASN1_SUCCESS) {
+			asn1_perror (result);
+			printf("Decoding error = \"%s\"\n", errorDescription);
+			break;
+		}
+
+		printf("Server response recieved..\n");
+		char recName[MAXLINE];
+		
+		for(int j=1 ;; j++){
+
+			snprintf(recName, sizeof(recName), "PeersAnswer.time?%d", j);
+			result = asn1_read_value(node, recName, time, &size);
+			if (result==ASN1_ELEMENT_NOT_FOUND){
+				printf(" %d Peers received.\n", j-1);
+				break;
+			}
+			printf("\tTime [%s] =>\"%s\"\n", recName, time);
+
+			snprintf(recName, sizeof(recName), "PeersAnswer.name?%d", j);
+			result = asn1_read_value(node, recName, name, &size);
+			printf("\tName [%s] =>\"%s\"\n", recName, name);
+
+			snprintf(recName, sizeof(recName), "PeersAnswer.message?%d", j);
+			result = asn1_read_value(node, recName, message, &size);
+			printf("\tMessage [%s] =>\"%s\"\n", recName, message);
+
+			char wbuf[MAXLINE];
+			result = asn1_read_value(node, recName, wbuf, &size);
+			if (result==ASN1_ELEMENT_NOT_FOUND){
+				printf(" %d Events received.\n", j+1);
+				break;
+			}
+
+			if (result!=ASN1_SUCCESS) {
+				break;
+			}
+		}
+		break;
+		
+	case 3:
+		vector<string> appList = parseCommand(dataBuff);
+		int k = (appList.size()-2)/4;
+		printf("Server response recieved..\n");
+		printf("Decoding %d peers..\n", k-1);
+
+		for(int j=0; j<k; j++){
+			strcpy(time, appList.at((j*4)+2+0).c_str());
+			strcpy(message, appList.at((j*4)+2+1).c_str());
+			strcpy(name, appList.at((j*4)+2+2).c_str());
+
+			printf("Peer #%d ------------------------------\n", j+1);
+			printf("\tName=\"%s\"\n", name);
+			printf("\tTime=\"%s\"\n", time);
+			printf("\tMessage=\"%s\"\n", message);
+		}
+		break;
+	}
+	asn1_delete_structure (&node);
+	asn1_delete_structure (&definitions);
+}
+
 int main (int argc, char *argv[]) {
     
     init_parseTree(); // initialise parse tree for asn1 encoding
