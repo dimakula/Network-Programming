@@ -49,8 +49,6 @@ string port;
 string gossip;
 string timestamp;
 
-string peerName, peerIP, peerPort;
-
 void printWelcomeScreen () {
     printf ("welcome! You have connected to %s through port %s\n", 
             host.c_str(), port.c_str());
@@ -91,7 +89,7 @@ int printUserPrompt () {
 	return flag; 
 }
 
-void promptForPeer () {
+void promptForPeer (string &peerName, string &peerIP, string &peerPort) {
 
     printf ("Enter peer name: ");
     getline (cin, peerName);
@@ -108,6 +106,7 @@ int udp_client () {
     struct addrinfo hints, *servinfo, *p;
     char  buffer [MAXDATASIZE];  
 	struct sockaddr_in peer;
+	string peerName, peerIP, peerPort;
     
     bzero (&hints, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -166,7 +165,7 @@ int udp_client () {
             data = fullGossipMessage (gossip, timestamp);
 	    
 	    } else if (command == OPT_PEER) {
-	        promptForPeer ();
+	        promptForPeer (peerName, peerIP, peerPort);
 	        data = fullPeerMessage (peerName, peerIP, peerPort);    
 	    }
 	
@@ -181,10 +180,10 @@ int udp_client () {
 //Use the same sockaddr for tcp as well.
 int tcp_client () {
 
-   char *buffer = new char [MAXDATASIZE];
+    char *buffer = new char [MAXDATASIZE];
     struct addrinfo hints, *servinfo, *p;
-    int rc;
-    int  tcpfd;
+    int rc, tcpfd, command;
+    string peerName, peerIP, peerPort;
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -220,8 +219,10 @@ int tcp_client () {
 
 	printWelcomeScreen ();
     printUsage ();
-    int command;
-    string data = fullGossipMessage (gossip, timestamp); // data to send
+    
+    MessageEncode(gossip, timestamp, buffer); // message returns in buffer
+    
+    //string data = fullGossipMessage (gossip, timestamp); // data to send
 	
 	do {
 		int totalSent = 0; 
@@ -229,9 +230,9 @@ int tcp_client () {
 	     
 	    printf ("sending...\n");
 	    
-	    while (totalSent < data.length()) {
+	    while (totalSent < strlen (buffer)) {
 	      
-	        if ((bytes = send (tcpfd, data.c_str(), data.length(), 0)) == -1) {
+	        if ((bytes = send (tcpfd, buffer, strlen(buffer), 0)) == -1) {
 	            
 	            if (errno == EINTR) continue;
 	            perror ("TCP");
@@ -241,17 +242,21 @@ int tcp_client () {
 	        totalSent += bytes;
 	    }
 	    
-	    printf ("finished sending\n\n");
+	    printf ("\nfinished sending\n\n");
 	    command = printUserPrompt();
+	    buffer[0] = '/0'; // Reset buffer
 	    
 	    if (command == OPT_GOSSIP) {
 	        printf ("Please enter new gossip message: ");
             getline (cin, gossip);
-            data = fullGossipMessage (gossip, timestamp);
+            
+            //data = fullGossipMessage (gossip, NULL);
+            MessageEncode(gossip, NULL, buffer);
 	    
 	    } else if (command == OPT_PEER) {
-	        promptForPeer ();
-	        data = fullPeerMessage (peerName, peerIP, peerPort);    
+	        promptForPeer (peerName, peerIP, peerPort);
+	        //data = fullPeerMessage (peerName, peerIP, peerPort);
+	        PeerEncode (peerName, peerIP, peerPort, buffer);
 	    }
 	
 	} while (command != OPT_EXIT);
@@ -405,7 +410,7 @@ int getCommandLineArgs (int argc, char *argv[]) {
 	return size;
 }*/
 
-void MessageDecode (int size, int tag){
+/*void MessageDecode (int size, int tag){
 
 	asn1_node definitions = NULL;
 	asn1_node node = NULL;
@@ -509,6 +514,7 @@ void MessageDecode (int size, int tag){
 	asn1_delete_structure (&node);
 	asn1_delete_structure (&definitions);
 }
+*/
 
 int main (int argc, char *argv[]) {
     

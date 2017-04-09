@@ -33,7 +33,6 @@
 #include <iostream>
 #include <errno.h>
 #include "client-commands.h"
-using namespace std;
 
 ///////////////////////////
 // Forwarded Subroutines //
@@ -45,7 +44,7 @@ void printUsage ();
 
 int printUserPrompt();
 
-void promptForPeer();
+void promptForPeer(std::string, std::string, std::string);
 
 int udp_client ();
 

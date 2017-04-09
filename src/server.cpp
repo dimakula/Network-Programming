@@ -48,7 +48,6 @@ mutex database_mutex;
 asn1_node definitions = NULL;
 
 
-
 // called upon hearing the control-C or control-Z signal
 void signal_stop (int a) {
     fprintf (stderr, "Cancelling server, closing all file handlers\n");
@@ -58,108 +57,6 @@ void signal_stop (int a) {
     sqlite3_close (db);
     fflush (stdout);
     exit (1);
-}
-
-
-string MessageDecode (int size) {
-
-	asn1_node definitions = NULL;
-	asn1_node node = NULL;
-	
-	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
-
-	char time[MAXLINE];
-	char name[MAXLINE];
-	char message[MAXLINE];
-	int result = 0;
-	char sb[MAXLINE];
-	char *dataBuff = new char[MAXLINE];
-
-	result = asn1_parser2tree ("ApplicationList_asn1_tab.c", &definitions, errorDescription);
-
-	unsigned char userNum[100];
-	int x;
-	unsigned long tag;
-	result = asn1_get_tag_der((const unsigned char *)dataBuff, size, userNum, &x, &tag);
-	if(result != ASN1_SUCCESS) {
-		asn1_perror (result);
-		printf("TAG error = \"%s\"\n", errorDescription);
-	}
-
-	switch(tag){
-	case 1: 
-		result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
-		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
-
-		if(result != ASN1_SUCCESS) {
-			asn1_perror (result);
-			printf("Decoding error = \"%s\"\n", errorDescription);
-			break;
-		}
-
-		printf("{APPLICATION} recieved..\n");
-		size = MAXLINE;
-		result = asn1_read_value(node, "name", name, &size);
-		printf("\tName=\"%s\"\n", name);
-
-		size = MAXLINE;
-		result = asn1_read_value(node, "time", time, &size);
-		printf("\tTime=\"%s\"\n", time);
-
-		size = MAXLINE;
-		result = asn1_read_value(node, "description", message, &size);
-		printf("\tMessage=\"%s\"\n", message);
-
-		sprintf(sb, "APPLICATION;%s;%s;%s", time, message, name);
-
-		break;
-	case 2:	
-		result = asn1_create_element(definitions, "ApplicationList.Peer", &node );
-		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
-
-		if(result != ASN1_SUCCESS)  {
-			asn1_perror (result);
-			printf("Decoding error = \"%s\"\n", errorDescription);
-			break;
-		}
-
-		printf("{APPLICATION} recieved..\n");
-		size = MAXLINE;
-		result = asn1_read_value(node, "afterTime", time, &size);
-		printf("\tTime=\"%s\"\n", time);
-
-		size = MAXLINE;
-		result = asn1_read_value(node, "name", name, &size);
-		printf("\tName=\"%s\"\n", name);
-
-		sprintf(sb, "APPLICATION;%s;%s", name, time);
-
-		break;
-	case 3: 
-			result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
-		result = asn1_der_decoding (&node, dataBuff, size, errorDescription);
-
-		if(result != ASN1_SUCCESS)  {
-			asn1_perror (result);
-			printf("Decoding error = \"%s\"\n", errorDescription);
-			break;
-		}
-
-		printf("{APPLICATION} recieved..\n");
-
-		size = MAXLINE;
-		result = asn1_read_value(node, "name", name, &size);
-		printf("\tName=\"%s\"\n", name);
-		sprintf(sb, "APPLICATION;%s", name);
-
-		break;
-
-	}
-	asn1_delete_structure (&node);
-	asn1_delete_structure (&definitions);
-
-	string stb = sb;
-	return stb;
 }
 
 
@@ -270,6 +167,107 @@ void broadcastGossip(char *message) {
 
 	return;
 }
+
+
+int MessageDecode (char *buffer, int size) {
+
+	asn1_node definitions = NULL;
+	asn1_node node = NULL;
+	
+	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+
+	char *time = new char[MAXLINE];
+	char *name = new char[MAXLINE];
+	char *message = new char[MAXLINE];
+	int result = 0;
+;
+	int length;
+
+	result = asn1_parser2tree ("ApplicationList_asn1_tab.c", &definitions, errorDescription);
+
+	unsigned char userNum[100];
+	int x;
+	unsigned long tag;
+	result = asn1_get_tag_der((const unsigned char *)buffer, size, userNum, &x, &tag);
+	
+	if(result != ASN1_SUCCESS) {
+		asn1_perror (result);
+		printf("TAG error = \"%s\"\n", errorDescription);
+		return -2;
+	}
+
+    result = asn1_get_length_der ((const unsigned char *)buffer, size, &length);
+    
+    if(result != ASN1_SUCCESS) {
+		asn1_perror (result);
+		printf("TAG error = \"%s\"\n", errorDescription);
+		return -1;
+	}
+    
+	switch(tag) {
+	    case 1: 
+		    result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
+		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
+
+		    if(result != ASN1_SUCCESS) {
+			    asn1_perror (result);
+			    printf("Decoding error = \"%s\"\n", errorDescription);
+			    break;
+		    }
+
+		    printf("{APPLICATION} recieved..\n");
+		    result = asn1_read_value(node, "name", name, &size);
+		    printf("\tName=\"%s\"\n", name);
+		    
+		    result = asn1_read_value(node, "time", time, &size);
+		    printf("\tTime=\"%s\"\n", time);
+
+		    result = asn1_read_value(node, "description", message, &size);
+		    printf("\tMessage=\"%s\"\n", message);
+
+		    break;
+	    case 2:	
+		    result = asn1_create_element(definitions, "ApplicationList.Peer", &node );
+		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
+
+		    if(result != ASN1_SUCCESS)  {
+			    asn1_perror (result);
+			    printf("Decoding error = \"%s\"\n", errorDescription);
+			    break;
+		    }
+
+		    printf("{APPLICATION} recieved..\n");
+		    result = asn1_read_value(node, "afterTime", time, &size);
+		    printf("\tTime=\"%s\"\n", time);
+
+		    result = asn1_read_value(node, "name", name, &size);
+		    printf("\tName=\"%s\"\n", name);
+
+		    break;
+	    case 3: 
+			result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
+		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
+
+		    if(result != ASN1_SUCCESS)  {
+			    asn1_perror (result);
+			    printf("Decoding error = \"%s\"\n", errorDescription);
+			    break;
+		    }
+
+		    printf("{APPLICATION} recieved..\n");
+
+		    result = asn1_read_value(node, "name", name, &size);
+		    printf("\tName=\"%s\"\n", name);
+
+		    break;
+
+	}
+	asn1_delete_structure (&node);
+	asn1_delete_structure (&definitions);
+
+	return 0;
+}
+
 
 // Parses the user commands and stores them in an sqlite3
 // database, returns an output string to send to the client
@@ -408,10 +406,6 @@ char *reader (char *buffer, int &offset) {
     return (char *)output;
 }
 
-char *asn1_reader (char *buffer, int &offset) {
-   
-    
-}
 
 //handler for the tcp socket
 void* tcp_handler (void *threadArgs) {
@@ -420,7 +414,7 @@ void* tcp_handler (void *threadArgs) {
     int totalWrite = 0; // total bytes written to client
     char *result;
     char *input;
-    int bytes;
+    int bytes, rc;
     bool receiving = true;
     
     // Guarantees that thread resources are deallocated upon return, no need to
@@ -444,7 +438,9 @@ void* tcp_handler (void *threadArgs) {
         // if zero is returned, the client closed connection
         if (bytes == 0)
             receiving = false;
-            
+        
+        rc = MessageDecode (buffer, offset);
+        /*   
         // While reader parses valid commands and returns non-null results
         while ((result = reader(buffer, offset)) != NULL) {
              printf ("TCP: %s\n", result);
@@ -461,6 +457,7 @@ void* tcp_handler (void *threadArgs) {
             // Reset the total bytes sent to the client
             totalWrite = 0;
         } 
+        */
     }
     
     close (confd);

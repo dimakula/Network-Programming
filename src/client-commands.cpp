@@ -63,15 +63,14 @@ int timestampAndHash (string gossip, string &timestamp, string &shaString) {
     return 0;
 }
 
-int PeersEncode () {
+int PeersEncode (char *dataBuff) {
 
 	//PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
-	result = asn1_create_element(definitions, "ApplicationList.Request3", &structure);
+	result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &structure);
 		
 	result = asn1_write_value(structure, "NULL", NULL, 1);
 		
 	int size = MAXLINE;
-	char *dataBuff = new char [size];
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	//asn1_delete_structure (structure);
@@ -85,9 +84,9 @@ int PeersEncode () {
 	return 0;
 }
 
-int PeerEncode(string peer, string ip, string port) {
+int PeerEncode(string peer, string ip, string port, char *dataBuff) {
     
-    if ((result = asn1_create_element(definitions, "ApplicationList.Request1", &structure)) != 1)
+    if ((result = asn1_create_element(definitions, "ApplicationList.Peer", &structure)) != 1)
         asn1_perror (result);
 		
 	if ((result = asn1_write_value(structure, "name", peer.c_str(), peer.length())) != ASN1_SUCCESS) 
@@ -98,7 +97,6 @@ int PeerEncode(string peer, string ip, string port) {
 	    asn1_perror (result);
 	
 	int size = MAXLINE;
-	char *dataBuff = new char[MAXLINE];
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	//asn1_delete_structure (structure);
@@ -113,9 +111,7 @@ int PeerEncode(string peer, string ip, string port) {
 }
 
 
-int MessageEncode(string gossip, string timestamp) {
-	
-	char *dataBuff = new char[MAXLINE];
+int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 	
 	int result = 0;
 	int size = MAXLINE;
@@ -125,7 +121,7 @@ int MessageEncode(string gossip, string timestamp) {
 	//timestamp GeneralizedTime,
 	//message UTF8String
 	//}
-	result = asn1_create_element(definitions, "ApplicationList.Request1", &structure);
+	result = asn1_create_element(definitions, "ApplicationList.Gossip", &structure);
 	string sha256 = NULL;
 	
 	timestampAndHash (gossip, timestamp, sha256);

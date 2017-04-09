@@ -20,11 +20,11 @@ int init_parseTree ();
 
 int timestampAndHash (std::string, std::string &, std::string &);
 
-int PeersEncode ();
+int PeersEncode (char*);
 
-int PeerEncode(char*, char*, char*);
+int PeerEncode(std::string, std::string, std::string, char*);
 
-int MessageEncode(std::string, std::string);
+int MessageEncode(std::string, std::string, char*);
 
 std::string fullPeerMessage (std::string, std::string, std::string);
 
