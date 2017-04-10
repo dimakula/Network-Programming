@@ -33,7 +33,7 @@ int timestampAndHash (string gossip, string &timestamp, string &shaString) {
     char *returnTime;
     
     // Create timestamp from current time if no timestamp was provided
-    if (!timestamp.empty()) {       
+    if (timestamp.empty()) {       
 
         typedef chrono::system_clock clock;
 
@@ -43,10 +43,12 @@ int timestampAndHash (string gossip, string &timestamp, string &shaString) {
  
         auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>   
                 (fraction);
-           
+        
+        // conforms to the asn1 definition for Generalized time
+        // YYYYMMDDhhmmss.sZ
         time_t time = chrono::system_clock::to_time_t (now);
-        sstream << put_time(localtime(&time), "%F-%H-%M-%S-");
-        sstream << milliseconds.count() << "Z";
+        sstream << put_time(localtime(&time), "%G%m%d%H%M%S");
+        sstream << "." << milliseconds.count() << "Z";
         timestamp = sstream.str();
     
     } else {
@@ -122,13 +124,24 @@ int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 	//message UTF8String
 	//}
 	result = asn1_create_element(definitions, "ApplicationList.Gossip", &structure);
-	string sha256 = NULL;
+	string sha256;
 	
 	timestampAndHash (gossip, timestamp, sha256);
 
-	result = asn1_write_value(structure, "sha256hash", sha256.c_str(), sha256.length());
-	result = asn1_write_value(structure, "time", timestamp.c_str(), timestamp.length());
-	result = asn1_write_value(structure, "message", gossip.c_str(), gossip.length());
+	if ((result = asn1_write_value(structure, "sha256hash", sha256.c_str(), sha256.length()))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (result);
+	}
+	
+	if ((result = asn1_write_value(structure, "time", timestamp.c_str(), 1))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (result);
+	}
+	
+	if ((result = asn1_write_value(structure, "message", gossip.c_str(), gossip.length()))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (result);
+	}
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	//asn1_delete_structure (structure);
@@ -137,7 +150,7 @@ int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 		asn1_perror (result);
 		printf("Encoding error = \"%s\"\n", errorDescription);
 	}
-	
+
 	return 0;
 }
 

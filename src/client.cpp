@@ -220,7 +220,8 @@ int tcp_client () {
 	printWelcomeScreen ();
     printUsage ();
     
-    MessageEncode(gossip, timestamp, buffer); // message returns in buffer
+    if (!gossip.empty())
+        MessageEncode(gossip, timestamp, buffer); // message returns in buffer
     
     //string data = fullGossipMessage (gossip, timestamp); // data to send
 	
@@ -294,121 +295,6 @@ int getCommandLineArgs (int argc, char *argv[]) {
 
     return flags;  
 }
-
-/*int MessageEncode(char *message, char *thisString) {
-	
-	vector<string> appList;
-
-	thisString = strtok ((char *)cmd.c_str(),":");
-	while (thisString != NULL){
-		appList.push_back(thisString);
-		thisString = strtok (NULL, ":");
-	}
-	return appList;	
-	
-	asn1_node definitions = NULL;
-	node = NULL;
-	
-	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
-	char time[MAXDATASIZE];
-	char message[MAXDATASIZE];
-	char name[MAXDATASIZE];
-	char ip[MAXDATASIZE];
-	//What else we need to show?
-	
-	int result = 0;
-	int size;
-	
-	//Three Applications required, which means 3 cases.
-	
-	int tag = -1;
-	vector<string> appList = parseCommand(message);
-	if (appList.at(0).compare("APPLICATION_DEFINITION") == 0) {
-		tag = 1;
-	}
-	if (appList.at(0).compare("SECOND_APPLICATION") == 0) {
-		tag = 2;
-	}
-	else if (appList.at(0).compare("LAST_APPLICATION") == 0) {
-		tag = 3;
-	}
-	
-	result = asn1_parser2tree ("ApplicationList.asn", &definitions, errorDescription);
-	
-	switch(tag) {
-		case 1:
-		//Gossip ::= [APPLICATION 1] EXPLICIT SEQUENCE {
-		//sha256hash OCTET STRING,
-		//timestamp GeneralizedTime,
-		//message UTF8String
-		//}
-		result = asn1_create_element(definitions, "ApplicationList.Request1", &node);
-		
-		strcpy(name, appList.at(1).c_str() );
-		strcpy(time, appList.at(2).c_str() );
-		strcpy(message, appList.at(3).c_str() );
-		
-
-		result = asn1_write_value(node, "name", name, 1);
-		result = asn1_write_value(node, "time", time, strlen());
-		result = asn1_write_value(node, "message", message, strlen(message));
-		
-		size = MAXDATASIZE;
-		
-		result = asn1_der_coding (node, "", dataBuff, &size, errorDescription);
-		if(result != ASN1_SUCCESS) {
-			asn1_perror (result);
-			printf("Encoding error = \"%s\"\n", errorDescription);
-		}
-		break;
-		
-		case 2:
-		//Peer ::= [APPLICATION 2] IMPLICIT SEQUENCE {
-		//name UTF8String, 
-		//port INTEGER, 
-		//ip PrintableString
-		//}
-		result = asn1_create_element(definitions, "ApplicationList.Request2", &node);
-        strcpy(name, appList.at(1).c_str());
-		strcpy(port, appList.at(2).c_str());
-		strcpy(ip, appList.at(3).c_str())
-
-		result = asn1_write_value(node, "name", name, 1);
-		result = asn1_write_value(node, "port", port, strlen());
-		result = asn1_write_value(node, "ip", ip, strlen(ip));
-		
-		size = MAXDATASIZE;
-		
-		result = asn1_der_coding (node, "", dataBuff, &size, errorDescription);
-		if(result != ASN1_SUCCESS) {
-			asn1_perror (result);
-			printf("Encoding error = \"%s\"\n", errorDescription);
-			return -1;
-		}
-		break;
-		
-		case 3:
-		//PeersQuery ::= [APPLICATION 3] IMPLICIT NULL
-		result = asn1_create_element(definitions, "ApplicationList.Request3", &node);
-		strcpy(NULL, appList.at(1).c_str());
-		
-		result = asn1_write_value(node, "NULL", NULL, 1);
-		
-		size = MAXDATASIZE;
-		
-		result = asn1_der_coding (node, "", dataBuff, &size, errorDescription);
-		if(result != ASN1_SUCCESS) {
-			asn1_perror (result);
-			printf("Encoding error = \"%s\"\n", errorDescription);
-			return -1;
-		}break;
-	}
-	
-	asn1_delete_structure (&node);
-	asn1_delete_structure (&definitions);
-	
-	return size;
-}*/
 
 /*void MessageDecode (int size, int tag){
 

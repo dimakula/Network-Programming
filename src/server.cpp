@@ -183,7 +183,13 @@ int MessageDecode (char *buffer, int size) {
 ;
 	int length;
 
-	result = asn1_parser2tree ("ApplicationList_asn1_tab.c", &definitions, errorDescription);
+	result = asn1_parser2tree ("ApplicationList.asn", &definitions, errorDescription);
+	
+	if (result != ASN1_SUCCESS) {
+	    asn1_perror (result);
+	    fprintf(stderr, "array2tree error = \"%s\"\n", errorDescription);
+        return -1; 
+    }
 
 	unsigned char userNum[100];
 	int x;
