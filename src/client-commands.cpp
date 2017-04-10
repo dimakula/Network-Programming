@@ -14,7 +14,7 @@ int result;
 // call before doing any other method
 int init_parseTree () {
     
-    if ((result = asn1_parser2tree ("ApplicationList.asn", &definitions, errorDescription))
+    if ((result = asn1_parser2tree ("/home/dmitry/Network-Programming/src/ApplicationList.asn", &definitions, errorDescription))
             != ASN1_SUCCESS) {
     
         asn1_perror (result); 
@@ -133,7 +133,8 @@ int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 	    asn1_perror (result);
 	}
 	
-	if ((result = asn1_write_value(structure, "time", timestamp.c_str(), 1))
+	// length has to be 1 for some unknown reason
+	if ((result = asn1_write_value(structure, "timestamp", timestamp.c_str(), 1))
 	        != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}

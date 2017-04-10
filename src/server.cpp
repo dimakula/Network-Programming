@@ -183,7 +183,7 @@ int MessageDecode (char *buffer, int size) {
 ;
 	int length;
 
-	result = asn1_parser2tree ("ApplicationList.asn", &definitions, errorDescription);
+	result = asn1_parser2tree ("/home/dmitry/Network-Programming/src/ApplicationList.asn", &definitions, errorDescription);
 	
 	if (result != ASN1_SUCCESS) {
 	    asn1_perror (result);
@@ -194,7 +194,7 @@ int MessageDecode (char *buffer, int size) {
 	unsigned char userNum[100];
 	int x;
 	unsigned long tag;
-	result = asn1_get_tag_der((const unsigned char *)buffer, size, userNum, &x, &tag);
+	result = asn1_get_tag_der ((const unsigned char *)buffer, size, userNum, &x, &tag);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
@@ -206,7 +206,7 @@ int MessageDecode (char *buffer, int size) {
     
     if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
-		printf("TAG error = \"%s\"\n", errorDescription);
+		printf("Length error = \"%s\"\n", errorDescription);
 		return -1;
 	}
     
