@@ -21,4 +21,4 @@ debug:
 	$(CXX) -o bin/server.o src/server.cpp $(CXXFLAGS) -g
 
 clean:
-	rm bin/* build/*
+	$(RM) $(EXECUTABLE) $(OBJ)

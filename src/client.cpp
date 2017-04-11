@@ -104,7 +104,7 @@ int udp_client () {
 
     int  udpfd, num, received;
     struct addrinfo hints, *servinfo, *p;
-    char  buffer [MAXDATASIZE];  
+    char *buffer = new char [MAXDATASIZE];  
 	struct sockaddr_in peer;
 	string peerName, peerIP, peerPort;
     
@@ -135,7 +135,10 @@ int udp_client () {
 	printWelcomeScreen ();
     printUsage ();
     int command;
-    string data = fullGossipMessage (gossip, timestamp); // data to send
+    //string data = fullGossipMessage (gossip, timestamp); // data to send
+    
+    if (!gossip.empty())
+        MessageEncode(gossip, timestamp, buffer); // message returns in buffer
 	
 	do {
 		int totalSent = 0; 
@@ -143,9 +146,9 @@ int udp_client () {
 	     
 	    printf ("sending...\n");
 	    
-	    while (totalSent < data.length()) {
+	    while (totalSent < strlen(buffer)) {
 	      
-	        if ((bytes = sendto (udpfd, data.c_str(), data.length(), 0, 
+	        if ((bytes = sendto (udpfd, buffer, strlen(buffer), 0, 
 	                p->ai_addr, p->ai_addrlen)) == -1) {
 	            
 	            if (errno == EINTR) continue;
@@ -162,11 +165,13 @@ int udp_client () {
 	    if (command == OPT_GOSSIP) {
 	        printf ("Please enter new gossip message: ");
             getline (cin, gossip);
-            data = fullGossipMessage (gossip, timestamp);
+            //data = fullGossipMessage (gossip, NULL);
+            MessageEncode(gossip, "", buffer);
 	    
 	    } else if (command == OPT_PEER) {
 	        promptForPeer (peerName, peerIP, peerPort);
-	        data = fullPeerMessage (peerName, peerIP, peerPort);    
+	        //data = fullPeerMessage (peerName, peerIP, peerPort);
+	        PeerEncode (peerName, peerIP, peerPort, buffer);    
 	    }
 	
 	} while (command != OPT_EXIT);
@@ -252,7 +257,7 @@ int tcp_client () {
             getline (cin, gossip);
             
             //data = fullGossipMessage (gossip, NULL);
-            MessageEncode(gossip, NULL, buffer);
+            MessageEncode(gossip, "", buffer);
 	    
 	    } else if (command == OPT_PEER) {
 	        promptForPeer (peerName, peerIP, peerPort);

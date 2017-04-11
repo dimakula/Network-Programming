@@ -81,6 +81,12 @@ callback (void *result, int argc, char **argv, char **azColName) {
     return 0;
 }
 
+static int 
+    peerCallback (void *result, int argc, char **arv, char **azColName) {
+    
+    
+}
+
 static int gossipCallback(void *message, int argc, char **argv, 
     char **azColName)
 {
@@ -176,9 +182,9 @@ int MessageDecode (char *buffer, int size) {
 	
 	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
 
-	char *time = new char[MAXLINE];
-	char *name = new char[MAXLINE];
-	char *message = new char[MAXLINE];
+	char *sha256, *time, *message;
+	char *name, *port, *ip;
+
 	int result = 0;
 ;
 	int length;
@@ -188,7 +194,7 @@ int MessageDecode (char *buffer, int size) {
 	if (result != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	    fprintf(stderr, "array2tree error = \"%s\"\n", errorDescription);
-        return -1; 
+        return -3; 
     }
 
 	unsigned char userNum[100];
@@ -201,18 +207,24 @@ int MessageDecode (char *buffer, int size) {
 		printf("TAG error = \"%s\"\n", errorDescription);
 		return -2;
 	}
-
+    
     result = asn1_get_length_der ((const unsigned char *)buffer, size, &length);
     
     if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
 		printf("Length error = \"%s\"\n", errorDescription);
-		return -1;
+	
+	// size of message is less than the expected length
+	} else if (size < length) {
+	    
+	    //return -1;
 	}
+	
+	printf ("Size = %d Length = %d\n", size, length);
     
 	switch(tag) {
 	    case 1: 
-		    result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
+		    result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
 		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
 
 		    if(result != ASN1_SUCCESS) {
@@ -221,17 +233,24 @@ int MessageDecode (char *buffer, int size) {
 			    break;
 		    }
 
+            sha256 = new char[MAXLINE];
+            time = new char[MAXLINE];
+            message = new char[MAXLINE];
+            
 		    printf("{APPLICATION} recieved..\n");
-		    result = asn1_read_value(node, "name", name, &size);
-		    printf("\tName=\"%s\"\n", name);
+		    result = asn1_read_value(node, "sha256hash", sha256, &size);
+		    printf("\tName=\"%s\"\n", sha256);
 		    
-		    result = asn1_read_value(node, "time", time, &size);
+		    result = asn1_read_value(node, "timestamp", time, &size);
 		    printf("\tTime=\"%s\"\n", time);
 
-		    result = asn1_read_value(node, "description", message, &size);
+		    result = asn1_read_value(node, "message", message, &size);
 		    printf("\tMessage=\"%s\"\n", message);
 
+            
+            delete [] sha256, time, message;
 		    break;
+		    
 	    case 2:	
 		    result = asn1_create_element(definitions, "ApplicationList.Peer", &node );
 		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
@@ -243,15 +262,18 @@ int MessageDecode (char *buffer, int size) {
 		    }
 
 		    printf("{APPLICATION} recieved..\n");
-		    result = asn1_read_value(node, "afterTime", time, &size);
-		    printf("\tTime=\"%s\"\n", time);
-
 		    result = asn1_read_value(node, "name", name, &size);
+		    printf("\tName =\"%s\"\n", time);
+
+		    result = asn1_read_value(node, "port", port, &size);
+		    printf("\tName=\"%s\"\n", name);
+		    
+		    result = asn1_read_value(node, "ip", ip, &size);
 		    printf("\tName=\"%s\"\n", name);
 
 		    break;
 	    case 3: 
-			result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
+			result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
 		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
 
 		    if(result != ASN1_SUCCESS)  {
@@ -268,6 +290,8 @@ int MessageDecode (char *buffer, int size) {
 		    break;
 
 	}
+	
+	delete [] buffer;
 	asn1_delete_structure (&node);
 	asn1_delete_structure (&definitions);
 
@@ -445,7 +469,9 @@ void* tcp_handler (void *threadArgs) {
         if (bytes == 0)
             receiving = false;
         
+        printf ("%s\n", buffer);
         rc = MessageDecode (buffer, offset);
+        
         /*   
         // While reader parses valid commands and returns non-null results
         while ((result = reader(buffer, offset)) != NULL) {

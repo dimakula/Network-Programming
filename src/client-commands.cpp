@@ -75,7 +75,7 @@ int PeersEncode (char *dataBuff) {
 	int size = MAXLINE;
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
-	//asn1_delete_structure (structure);
+	asn1_delete_structure (&structure);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
@@ -101,7 +101,7 @@ int PeerEncode(string peer, string ip, string port, char *dataBuff) {
 	int size = MAXLINE;
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
-	//asn1_delete_structure (structure);
+	asn1_delete_structure (&structure);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
@@ -143,14 +143,9 @@ int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 	        != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}
-		
+
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
-	//asn1_delete_structure (structure);
-	
-	if(result != ASN1_SUCCESS) {
-		asn1_perror (result);
-		printf("Encoding error = \"%s\"\n", errorDescription);
-	}
+	asn1_delete_structure (&structure);
 
 	return 0;
 }
