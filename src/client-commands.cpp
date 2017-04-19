@@ -4,7 +4,7 @@
 
 using namespace std;
 
-#define MAXLINE 512
+#define MAXLINE 1024
 
 asn1_node definitions = NULL;	
 asn1_node structure = NULL;
@@ -88,6 +88,7 @@ int PeersEncode (char *dataBuff) {
 
 int PeerEncode(string peer, string ip, string port, char *dataBuff) {
     
+    init_parseTree();
     if ((result = asn1_create_element(definitions, "ApplicationList.Peer", &structure)) != 1)
         asn1_perror (result);
 		
@@ -102,6 +103,7 @@ int PeerEncode(string peer, string ip, string port, char *dataBuff) {
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	asn1_delete_structure (&structure);
+	asn1_delete_structure (&definitions);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
@@ -123,30 +125,34 @@ int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 	//timestamp GeneralizedTime,
 	//message UTF8String
 	//}
+	
+    init_parseTree(); // Have to do this every time because reasons
+    
 	result = asn1_create_element(definitions, "ApplicationList.Gossip", &structure);
 	string sha256;
 	
 	timestampAndHash (gossip, timestamp, sha256);
 
-	if ((result = asn1_write_value(structure, "sha256hash", sha256.c_str(), sha256.length()))
+	if ((result = asn1_write_value(structure, "sha256hash", sha256.c_str(), strlen(sha256.c_str())))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (result);
+	}
+
+	if ((result = asn1_write_value(structure, "timestamp", timestamp.c_str(), strlen(timestamp.c_str())))
 	        != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}
 	
-	// length has to be 1 for some unknown reason
-	if ((result = asn1_write_value(structure, "timestamp", timestamp.c_str(), 1))
-	        != ASN1_SUCCESS) {
-	    asn1_perror (result);
-	}
-	
-	if ((result = asn1_write_value(structure, "message", gossip.c_str(), gossip.length()))
+	if ((result = asn1_write_value(structure, "message", gossip.c_str(), 0))
 	        != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}
 
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	asn1_delete_structure (&structure);
+	asn1_delete_structure (&definitions);
 
+    printf("%s\n", dataBuff);
 	return 0;
 }
 
@@ -174,36 +180,6 @@ string fullGossipMessage (string gossip, string timestamp) {
     printf ("%s\n", fullMessage.c_str());
     
     return fullMessage;
-    /*
-    // Create timestamp from current time if no timestamp was provided
-    if (timestamp.empty()) {       
-
-        typedef chrono::system_clock clock;
-
-        auto now = clock::now();
-        auto seconds = chrono::time_point_cast<chrono::seconds>(now);
-        auto fraction = now - seconds;
- 
-        auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>   
-                (fraction);
-           
-        time_t time = chrono::system_clock::to_time_t (now);
-        sstream << put_time(localtime(&time), "%F-%H-%M-%S-");
-        sstream << milliseconds.count() << "Z:";
-        sstream << gossip;
-        timestampAndMessage = sstream.str();
-    
-    } else {
-        sstream << timestamp << ":";
-        sstream << gossip;
-        timestampAndMessage = sstream.str();
-    }
-       
-    SHA256 sha256;
-    sstream.str(string());
-    sstream << "GOSSIP:" << sha256 (timestampAndMessage); 
-    sstream << ":" << timestampAndMessage << "%";
-    */
 }
 
 

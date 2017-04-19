@@ -46,6 +46,8 @@ string latestGossip;
 mutex database_mutex;
 
 asn1_node definitions = NULL;
+asn1_node structure = NULL;
+char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
 
 
 // called upon hearing the control-C or control-Z signal
@@ -81,10 +83,45 @@ callback (void *result, int argc, char **argv, char **azColName) {
     return 0;
 }
 
+
 static int 
-    peerCallback (void *result, int argc, char **arv, char **azColName) {
-    
-    
+peersCallback (void *result, int argc, char **argv, char **azColName) {
+
+    asn1_node node = NULL;
+    int rc = asn1_create_element(definitions, "ApplicationList.Peer", &node);
+
+    if ((rc = asn1_write_value(node, "name", argv[0], 0))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (rc);
+	}
+	
+	if ((rc = asn1_write_value(node, "port", argv[1], 0))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (rc);
+	}
+	
+    if ((rc = asn1_write_value(node, "ip", argv[2], 0))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (rc);
+	}
+	
+	char *buffer = new char[MAXLINE];
+	int size = MAXLINE;
+		
+	rc = asn1_der_coding (node, "", buffer, &size, errorDescription);
+    asn1_delete_structure (&node);
+	
+    if ((rc = asn1_write_value((asn1_node)result, "Peer.?LAST", "NEW", 1))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (rc);
+	}
+	
+	if ((rc = asn1_write_value((asn1_node)result, "Peer.?LAST", buffer, 1))
+	        != ASN1_SUCCESS) {
+	    asn1_perror (rc);
+	}
+	
+	delete [] buffer;
 }
 
 static int gossipCallback(void *message, int argc, char **argv, 
@@ -175,32 +212,43 @@ void broadcastGossip(char *message) {
 }
 
 
-int MessageDecode (char *buffer, int size) {
-
-	asn1_node definitions = NULL;
-	asn1_node node = NULL;
-	
-	char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+int MessageDecode (char *buffer, int &offset) {
 
 	char *sha256, *time, *message;
 	char *name, *port, *ip;
+	string sql, values;
+	
+	char* zErrMsg = 0; // Buffer for error handling.
+	bool broadcast, sendPeers;
+	broadcast = sendPeers = false;
 
 	int result = 0;
-;
 	int length;
 
-	result = asn1_parser2tree ("/home/dmitry/Network-Programming/src/ApplicationList.asn", &definitions, errorDescription);
-	
-	if (result != ASN1_SUCCESS) {
-	    asn1_perror (result);
-	    fprintf(stderr, "array2tree error = \"%s\"\n", errorDescription);
-        return -3; 
-    }
+    asn1_node node = NULL;
 
+    // generate asn1 definitions
+    char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+    if ((result = asn1_parser2tree ("/home/dmitry/Network-Programming/src/ApplicationList.asn", &definitions, errorDescription))
+            != ASN1_SUCCESS) {
+            asn1_perror(result);
+    }
+    
+    /*const unsigned char *DERLength = new unsigned char [ASN1_MAX_LENGTH_SIZE];
+    result = asn1_get_length_der (DERLength, offset, &length);
+    printf ("Length = %d\n", length);
+    printf ("Stuff = %s\n", DERLength);
+    
+    if(result != ASN1_SUCCESS) {
+		asn1_perror (result);
+		printf("Length error = \"%s\"\n", errorDescription);
+
+	} */
+	
 	unsigned char userNum[100];
 	int x;
 	unsigned long tag;
-	result = asn1_get_tag_der ((const unsigned char *)buffer, size, userNum, &x, &tag);
+	result = asn1_get_tag_der ((const unsigned char *)buffer, offset, userNum, &x, &tag);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
@@ -208,24 +256,10 @@ int MessageDecode (char *buffer, int size) {
 		return -2;
 	}
     
-    result = asn1_get_length_der ((const unsigned char *)buffer, size, &length);
-    
-    if(result != ASN1_SUCCESS) {
-		asn1_perror (result);
-		printf("Length error = \"%s\"\n", errorDescription);
-	
-	// size of message is less than the expected length
-	} else if (size < length) {
-	    
-	    //return -1;
-	}
-	
-	printf ("Size = %d Length = %d\n", size, length);
-    
 	switch(tag) {
 	    case 1: 
 		    result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
-		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
+		    result = asn1_der_decoding (&node, buffer, offset, errorDescription);
 
 		    if(result != ASN1_SUCCESS) {
 			    asn1_perror (result);
@@ -236,24 +270,34 @@ int MessageDecode (char *buffer, int size) {
             sha256 = new char[MAXLINE];
             time = new char[MAXLINE];
             message = new char[MAXLINE];
-            
+
 		    printf("{APPLICATION} recieved..\n");
-		    result = asn1_read_value(node, "sha256hash", sha256, &size);
-		    printf("\tName=\"%s\"\n", sha256);
+		    result = asn1_read_value(node, "sha256hash", sha256, &offset);
+		    printf("\t\Hash=\"%s\"\n", sha256);
 		    
-		    result = asn1_read_value(node, "timestamp", time, &size);
+		    result = asn1_read_value(node, "timestamp", time, &offset);
 		    printf("\tTime=\"%s\"\n", time);
 
-		    result = asn1_read_value(node, "message", message, &size);
+		    result = asn1_read_value(node, "message", message, &offset);
 		    printf("\tMessage=\"%s\"\n", message);
 
+            values = "\'" + string(sha256) + "\', \'" + string(message) +
+                        "\', \'" + string(time) + "\'";
+                      
+            sql = "INSERT INTO GOSSIP (DIGEST, MESSAGE, GENERATED)" \
+                "VALUES (" + values + ");";
+           
+            database_mutex.lock();
+            result = sqlite3_exec(db, sql.c_str(), peersCallback, 0, &zErrMsg);
+            database_mutex.unlock();
             
+            broadcast = true;
             delete [] sha256, time, message;
 		    break;
 		    
 	    case 2:	
 		    result = asn1_create_element(definitions, "ApplicationList.Peer", &node );
-		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
+		    result = asn1_der_decoding (&node, buffer, offset, errorDescription);
 
 		    if(result != ASN1_SUCCESS)  {
 			    asn1_perror (result);
@@ -261,20 +305,37 @@ int MessageDecode (char *buffer, int size) {
 			    break;
 		    }
 
+            name = new char[MAXLINE];
+            port = new char[MAXLINE];
+            ip   = new char[MAXLINE];
+            
 		    printf("{APPLICATION} recieved..\n");
-		    result = asn1_read_value(node, "name", name, &size);
+		    result = asn1_read_value(node, "name", name, &offset);
 		    printf("\tName =\"%s\"\n", time);
 
-		    result = asn1_read_value(node, "port", port, &size);
+		    result = asn1_read_value(node, "port", port, &offset);
 		    printf("\tName=\"%s\"\n", name);
 		    
-		    result = asn1_read_value(node, "ip", ip, &size);
+		    result = asn1_read_value(node, "ip", ip, &offset);
 		    printf("\tName=\"%s\"\n", name);
+		    		            
+            values = "\'" + string(name) + "\', " + string(port) + ", \'" + string(ip) + "\'";
+        
+            // inserts or replaces peer with new values
+            sql = "INSERT OR REPLACE INTO PEERS (PEER, PORT, IP)" \
+              "VALUES (" + values + ");";
 
+            database_mutex.lock();
+            result = sqlite3_exec(db, sql.c_str(), peersCallback, 0, &zErrMsg);
+            database_mutex.unlock();
+            
+            delete [] name, port, ip;
 		    break;
+		    
 	    case 3: 
+	        int size = MAXLINE;
 			result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
-		    result = asn1_der_decoding (&node, buffer, size, errorDescription);
+		    result = asn1_der_coding (node, "", buffer, &size, errorDescription); 
 
 		    if(result != ASN1_SUCCESS)  {
 			    asn1_perror (result);
@@ -282,19 +343,39 @@ int MessageDecode (char *buffer, int size) {
 			    break;
 		    }
 
+            // pass in the node to the callback function to build the PeersAnswer
+            result = sqlite3_exec(db, sql.c_str(), peersCallback, &node, &zErrMsg);
+            sendPeers = true;
 		    printf("{APPLICATION} recieved..\n");
 
-		    result = asn1_read_value(node, "name", name, &size);
+		    result = asn1_read_value(node, "name", name, &offset);
 		    printf("\tName=\"%s\"\n", name);
 
 		    break;
 
 	}
 	
-	delete [] buffer;
+    if (result == SQLITE_CONSTRAINT) {
+        fprintf(stderr, "DISCARDED\n");
+     
+    } else if (result != SQLITE_OK) {
+        fprintf(stderr, "SQL error: %s\n", zErrMsg);
+        sqlite3_free(zErrMsg);      
+    
+    } else if (broadcast) {
+    	//broadcastGossip(message);
+    }
+    
+    else if (sendPeers) {
+
+    }
+
+    //memset (buffer, 0, MAXLINE);
+	buffer[0] = '/0';
+	offset = 0;
 	asn1_delete_structure (&node);
 	asn1_delete_structure (&definitions);
-
+    
 	return 0;
 }
 
@@ -469,7 +550,7 @@ void* tcp_handler (void *threadArgs) {
         if (bytes == 0)
             receiving = false;
         
-        printf ("%s\n", buffer);
+        printf ("\n%s\n", buffer);
         rc = MessageDecode (buffer, offset);
         
         /*   
@@ -494,7 +575,7 @@ void* tcp_handler (void *threadArgs) {
     
     close (confd);
     printf ("Client has closed the connection\n");
-    delete [] result;
+    //delete [] result;
 }
 
 
@@ -535,7 +616,9 @@ void* udp_handler (void *threadArgs) {
 	    if(bytes == 0) 
 		    receiving = false;
 		    
-		while ((result = reader(buffer, offset)) != NULL) {
+		rc = MessageDecode (buffer, offset);
+		    
+		/*while ((result = reader(buffer, offset)) != NULL) {
 		    printf ("UDP: %s\n", result);
 		    
 		    while (totalSent < strlen (result)) {
@@ -551,12 +634,12 @@ void* udp_handler (void *threadArgs) {
 	        
 	        // Reset the total bytes send to the client
 	        totalSent = 0;
-		}
+		}*/
 	}
 	
 	close (sockfd);
 	printf ("Client has closed the connection\n");
-	delete []result;
+	//delete []result;
 }
 
 // run when child is created
@@ -628,7 +711,7 @@ int main (int argc, char *argv[]) {
     
     // database for storing peers and messages 
     setup_database (filePath);
-    
+      
     int nready; // return result for poll
     int rc; // Return code
     const int nfds = 2; // number of file descriptors
@@ -646,13 +729,6 @@ int main (int argc, char *argv[]) {
 
     int numThreads = 0; // current number of threads active
     pthread_t threadID; // current threadID, not used for anything
-    
-    // generate asn1 definitions
-    char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
-    /*if ((rc = asn1 parser2tree ("ApplicationList.asn", &definitions, errorDescription))
-            != ASN1_SUCCESS) {
-            asn1_perror(rc);
-    }*/
  
     // get tcp socket descriptor
     if ((tcpfd = socket (AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -739,7 +815,7 @@ int main (int argc, char *argv[]) {
     // start persistent server
     for ( ; ; ) {
         char *buffer = new char[MAXLINE];
-        if ((nready = poll(ufds, 2, timeout)) < 0) {     
+        if ((nready = poll(ufds, 2, -1)) < 0) {     
             //if (errno = EINTR) continue; // don't want signals to create interrupts
             perror("Poll");
             break;

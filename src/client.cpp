@@ -408,8 +408,7 @@ int getCommandLineArgs (int argc, char *argv[]) {
 */
 
 int main (int argc, char *argv[]) {
-    
-    init_parseTree(); // initialise parse tree for asn1 encoding
+
     int flag = getCommandLineArgs (argc, argv);
     
     if (flag == OPT_UDP)
