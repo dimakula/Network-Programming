@@ -1,3 +1,3 @@
 echo Connecting to 127.0.0.1 port 8081...
-ncat -l 127.0.0.1 8081 -u
-
+ncat -l 127.0.0.1 8081 -u >> gossip.out |
+asn1Decoding ApplicationList.asn gossip.out ApplicationList.Gossip

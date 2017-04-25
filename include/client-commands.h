@@ -22,7 +22,7 @@ int timestampAndHash (std::string, std::string &, std::string &);
 
 int PeersEncode (char*);
 
-int PeerEncode(std::string, std::string, std::string, char*);
+int PeerEncode(char*, char*, char*, char*);
 
 int MessageEncode(std::string, std::string, char*);
 

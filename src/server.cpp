@@ -22,7 +22,7 @@
 using namespace std;
 
 #define MAX_CALLS 5 // the maximum number of queued connections allowed
-#define MAXLINE 512 // the maximum size of the input buffer
+#define MAXLINE 2048 // the maximum size of the input buffer
 #define MAX_THREADS 5 // Maximum number of threads that can be operating
 
 // get path separator for the specific os
@@ -48,6 +48,31 @@ mutex database_mutex;
 asn1_node definitions = NULL;
 asn1_node structure = NULL;
 char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+
+const asn1_static_node ApplicationList_asn1_tab[] = {
+  { "ApplicationList", 536875024, NULL },
+  { NULL, 1073741836, NULL },
+  { "Gossip", 1610620933, NULL },
+  { NULL, 1073744904, "1"},
+  { "sha256hash", 1073741831, NULL },
+  { "timestamp", 1073741861, NULL },
+  { "message", 34, NULL },
+  { "Peer", 1610620933, NULL },
+  { NULL, 1073746952, "2"},
+  { "name", 1073741858, NULL },
+  { "port", 1073741827, NULL },
+  { "ip", 31, NULL },
+  { "PeersQuery", 1610620948, NULL },
+  { NULL, 5128, "3"},
+  { "PeersAnswer", 1610620939, NULL },
+  { NULL, 1073743880, "1"},
+  { NULL, 2, "Peer"},
+  { "UTF8String", 1610620935, NULL },
+  { NULL, 4360, "12"},
+  { "PrintableString", 536879111, NULL },
+  { NULL, 4360, "19"},
+  { NULL, 0, NULL }
+};
 
 
 // called upon hearing the control-C or control-Z signal
@@ -223,32 +248,21 @@ int MessageDecode (char *buffer, int &offset) {
 	broadcast = sendPeers = false;
 
 	int result = 0;
-	int length;
+	int length = offset;
 
     asn1_node node = NULL;
 
     // generate asn1 definitions
     char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
-    if ((result = asn1_parser2tree ("/home/dmitry/Network-Programming/src/ApplicationList.asn", &definitions, errorDescription))
+    if ((result = asn1_array2tree (ApplicationList_asn1_tab, &definitions, errorDescription))
             != ASN1_SUCCESS) {
             asn1_perror(result);
     }
-    
-    /*const unsigned char *DERLength = new unsigned char [ASN1_MAX_LENGTH_SIZE];
-    result = asn1_get_length_der (DERLength, offset, &length);
-    printf ("Length = %d\n", length);
-    printf ("Stuff = %s\n", DERLength);
-    
-    if(result != ASN1_SUCCESS) {
-		asn1_perror (result);
-		printf("Length error = \"%s\"\n", errorDescription);
-
-	} */
 	
 	unsigned char userNum[100];
 	int x;
 	unsigned long tag;
-	result = asn1_get_tag_der ((const unsigned char *)buffer, offset, userNum, &x, &tag);
+	result = asn1_get_tag_der ((const unsigned char *)buffer, length, userNum, &x, &tag);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
@@ -257,9 +271,9 @@ int MessageDecode (char *buffer, int &offset) {
 	}
     
 	switch(tag) {
-	    case 1: 
+	    case 1:
 		    result = asn1_create_element(definitions, "ApplicationList.Gossip", &node );
-		    result = asn1_der_decoding (&node, buffer, offset, errorDescription);
+		    result = asn1_der_decoding (&node, buffer, length, errorDescription);
 
 		    if(result != ASN1_SUCCESS) {
 			    asn1_perror (result);
@@ -274,6 +288,7 @@ int MessageDecode (char *buffer, int &offset) {
 		    printf("{APPLICATION} recieved..\n");
 		    result = asn1_read_value(node, "sha256hash", sha256, &offset);
 		    printf("\t\Hash=\"%s\"\n", sha256);
+		    
 		    
 		    result = asn1_read_value(node, "timestamp", time, &offset);
 		    printf("\tTime=\"%s\"\n", time);
@@ -297,7 +312,7 @@ int MessageDecode (char *buffer, int &offset) {
 		    
 	    case 2:	
 		    result = asn1_create_element(definitions, "ApplicationList.Peer", &node );
-		    result = asn1_der_decoding (&node, buffer, offset, errorDescription);
+		    result = asn1_der_decoding (&node, buffer, length, errorDescription);
 
 		    if(result != ASN1_SUCCESS)  {
 			    asn1_perror (result);
@@ -311,13 +326,13 @@ int MessageDecode (char *buffer, int &offset) {
             
 		    printf("{APPLICATION} recieved..\n");
 		    result = asn1_read_value(node, "name", name, &offset);
-		    printf("\tName =\"%s\"\n", time);
+		    printf("\tName =\"%s\"\n", name);
 
 		    result = asn1_read_value(node, "port", port, &offset);
-		    printf("\tName=\"%s\"\n", name);
+		    printf("\tPort =\"%s\"\n", port);
 		    
 		    result = asn1_read_value(node, "ip", ip, &offset);
-		    printf("\tName=\"%s\"\n", name);
+		    printf("\tIP =\"%s\"\n", ip);
 		    		            
             values = "\'" + string(name) + "\', " + string(port) + ", \'" + string(ip) + "\'";
         
@@ -334,7 +349,7 @@ int MessageDecode (char *buffer, int &offset) {
 		    
 	    case 3: 
 	        int size = MAXLINE;
-			result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node );
+			result = asn1_create_element(definitions, "ApplicationList.PeersAnswer", &node);
 		    result = asn1_der_coding (node, "", buffer, &size, errorDescription); 
 
 		    if(result != ASN1_SUCCESS)  {
@@ -363,15 +378,16 @@ int MessageDecode (char *buffer, int &offset) {
         sqlite3_free(zErrMsg);      
     
     } else if (broadcast) {
-    	//broadcastGossip(message);
+    	
+    	broadcastGossip (buffer);
     }
     
     else if (sendPeers) {
 
     }
 
-    //memset (buffer, 0, MAXLINE);
-	buffer[0] = '/0';
+    //memset (buffer, 0, MAXLINE); //FIX THIS EVENTUALLY OTHERWISE YOU'LL ALWAYS BE CLEARING YOUR BUFFER
+	//buffer[0] = '/0';
 	offset = 0;
 	asn1_delete_structure (&node);
 	asn1_delete_structure (&definitions);
@@ -526,7 +542,7 @@ void* tcp_handler (void *threadArgs) {
     char *result;
     char *input;
     int bytes, rc;
-    bool receiving = true;
+
     
     // Guarantees that thread resources are deallocated upon return, no need to
     // rejoin the main thread
@@ -538,20 +554,36 @@ void* tcp_handler (void *threadArgs) {
     char *buffer =  ((struct tcp_args *) threadArgs) -> buffer;
     //free (threadArgs);
     
+    struct timeval timeout;
+    timeout.tv_sec = 20;
+    timeout.tv_usec = 0;
+    
+    if (setsockopt (confd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,
+                sizeof(timeout)) < 0)
+            perror("setsockopt failed\n");
+    
     // keep receiving until client closes connection
-    while (receiving) {
+    while (1) {
     
         if ((bytes = recv (confd, buffer + offset, MAXLINE - offset, 
                 flags)) != -1)
             offset += bytes;
         
-        printf ("Bytes: %d\n", bytes);
-        // if zero is returned, the client closed connection
-        if (bytes == 0)
-            receiving = false;
+        if (bytes == -1) {
+            printf ("Timeout occurred\n");
+            break;
+        }
         
-        printf ("\n%s\n", buffer);
+        // if zero is returned, the client closed connection
+        if (bytes == 0) {
+            printf ("Client has closed the connection\n");
+            break;
+        }
+
+        printf ("Bytes: %d\n", bytes);
         rc = MessageDecode (buffer, offset);
+        memset (buffer, 0, MAXLINE);
+        
         
         /*   
         // While reader parses valid commands and returns non-null results
@@ -574,7 +606,6 @@ void* tcp_handler (void *threadArgs) {
     }
     
     close (confd);
-    printf ("Client has closed the connection\n");
     //delete [] result;
 }
 
@@ -587,7 +618,6 @@ void* udp_handler (void *threadArgs) {
 	char *input;
 	char *result;
 	int totalSent;
-	bool receiving = true;
 	
 	// Guarantees that thread resources are deallocated upon return, no need to
     // rejoin the main thread
@@ -602,7 +632,7 @@ void* udp_handler (void *threadArgs) {
     //free (threadArgs);
 	
 	// keep receiving until client closes connection
-	while (receiving) {
+	while (1) {
 
 	    // Receive until read all the message
 	    if ((bytes = recvfrom(sockfd, buffer + offset, MAXLINE - offset,
@@ -611,12 +641,19 @@ void* udp_handler (void *threadArgs) {
 	        
 	    else perror ("Recieve");
 
+        if (bytes == -1) {
+            printf ("Timeout occurred\n");
+            break;
+        }
         
-		// if zero is received the client closed the connection
-	    if(bytes == 0) 
-		    receiving = false;
+        // if zero is returned, the client closed connection
+        if (bytes == 0) {
+            printf ("Client has closed the connection\n");
+            break;
+        }
 		    
 		rc = MessageDecode (buffer, offset);
+		memset (buffer, 0, MAXLINE);
 		    
 		/*while ((result = reader(buffer, offset)) != NULL) {
 		    printf ("UDP: %s\n", result);

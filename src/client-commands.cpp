@@ -4,21 +4,48 @@
 
 using namespace std;
 
-#define MAXLINE 1024
+#define MAXLINE 2048
 
 asn1_node definitions = NULL;	
 asn1_node structure = NULL;
 char errorDescription[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
 int result;
 
+
+const asn1_static_node ApplicationList_asn1_tab[] = {
+  { "ApplicationList", 536875024, NULL },
+  { NULL, 1073741836, NULL },
+  { "Gossip", 1610620933, NULL },
+  { NULL, 1073744904, "1"},
+  { "sha256hash", 1073741831, NULL },
+  { "timestamp", 1073741861, NULL },
+  { "message", 34, NULL },
+  { "Peer", 1610620933, NULL },
+  { NULL, 1073746952, "2"},
+  { "name", 1073741858, NULL },
+  { "port", 1073741827, NULL },
+  { "ip", 31, NULL },
+  { "PeersQuery", 1610620948, NULL },
+  { NULL, 5128, "3"},
+  { "PeersAnswer", 1610620939, NULL },
+  { NULL, 1073743880, "1"},
+  { NULL, 2, "Peer"},
+  { "UTF8String", 1610620935, NULL },
+  { NULL, 4360, "12"},
+  { "PrintableString", 536879111, NULL },
+  { NULL, 4360, "19"},
+  { NULL, 0, NULL }
+};
+
+
 // call before doing any other method
 int init_parseTree () {
     
-    if ((result = asn1_parser2tree ("/home/dmitry/Network-Programming/src/ApplicationList.asn", &definitions, errorDescription))
+    if ((result = asn1_array2tree (ApplicationList_asn1_tab, &definitions, errorDescription))
             != ASN1_SUCCESS) {
     
         asn1_perror (result); 
-        fprintf(stderr, "Parser2tree error = \"%s\"\n", errorDescription);
+        fprintf(stderr, "Array2tree error = \"%s\"\n", errorDescription);
         return -1; 
     }
     
@@ -76,27 +103,30 @@ int PeersEncode (char *dataBuff) {
 		
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
 	asn1_delete_structure (&structure);
+	asn1_delete_structure (&definitions);
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
-		printf("Encoding error = \"%s\"\n", errorDescription);
+		fprintf(stderr, "Encoding error = \"%s\"\n", errorDescription);
 		return -1;
 	}
 
 	return 0;
 }
 
-int PeerEncode(string peer, string ip, string port, char *dataBuff) {
+int PeerEncode(char *peer, char *ip, char *port, char *dataBuff) {
     
     init_parseTree();
-    if ((result = asn1_create_element(definitions, "ApplicationList.Peer", &structure)) != 1)
-        asn1_perror (result);
+    asn1_create_element(definitions, "ApplicationList.Peer", &structure);
 		
-	if ((result = asn1_write_value(structure, "name", peer.c_str(), peer.length())) != ASN1_SUCCESS) 
+	if ((result = asn1_write_value(structure, "name", peer, strlen(peer))) 
+	        != ASN1_SUCCESS) 
 	    asn1_perror (result);
-	if ((result = asn1_write_value(structure, "port", port.c_str(), port.length())) != ASN1_SUCCESS)
+	if ((result = asn1_write_value(structure, "port", port, strlen(port))) 
+	        != ASN1_SUCCESS)
 	    asn1_perror (result);
-	if ((result = asn1_write_value(structure, "ip",   ip.c_str(),   ip.length()))   != ASN1_SUCCESS)
+	if ((result = asn1_write_value(structure, "ip", ip, strlen(ip))) 
+	        != ASN1_SUCCESS)
 	    asn1_perror (result);
 	
 	int size = MAXLINE;
@@ -107,10 +137,35 @@ int PeerEncode(string peer, string ip, string port, char *dataBuff) {
 	
 	if(result != ASN1_SUCCESS) {
 		asn1_perror (result);
-		printf("Encoding error = \"%s\"\n", errorDescription);
+		fprintf(stderr, "Encoding error = \"%s\"\n", errorDescription);
 		return -1;
 	}
-	
+
+	/*	    result = asn1_create_element(definitions, "ApplicationList.Peer", &structure);
+		    result = asn1_der_decoding (&structure, dataBuff, strlen(dataBuff), errorDescription);
+
+		    if(result != ASN1_SUCCESS)  {
+			    asn1_perror (result);
+			    printf("Decoding error = \"%s\"\n", errorDescription);
+		    }
+
+            char *charname = new char[MAXLINE];
+            char *charport = new char[MAXLINE];
+            char *charip   = new char[MAXLINE];
+            int length = MAXLINE;
+            
+		    printf("{APPLICATION} recieved..\n");
+		    result = asn1_read_value(structure, "name", charname, &length);
+		    printf("\tName =\"%s\"\n", charname);
+
+		    result = asn1_read_value(structure, "port", charport, &length);
+		    printf("\tPort =\"%s\"\n", charport);
+		    
+		    result = asn1_read_value(structure, "ip", charip, &length);
+		    printf("\tIP =\"%s\"\n", charip);
+		    
+
+	*/
 	return 0;
 }
 
@@ -133,26 +188,26 @@ int MessageEncode(string gossip, string timestamp, char *dataBuff) {
 	
 	timestampAndHash (gossip, timestamp, sha256);
 
-	if ((result = asn1_write_value(structure, "sha256hash", sha256.c_str(), strlen(sha256.c_str())))
-	        != ASN1_SUCCESS) {
+	if ((result = asn1_write_value(structure, "sha256hash", sha256.c_str(),
+	        strlen (sha256.c_str()))) != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}
 
-	if ((result = asn1_write_value(structure, "timestamp", timestamp.c_str(), strlen(timestamp.c_str())))
-	        != ASN1_SUCCESS) {
+	if ((result = asn1_write_value(structure, "timestamp", timestamp.c_str(),
+	        1)) != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}
 	
-	if ((result = asn1_write_value(structure, "message", gossip.c_str(), 0))
-	        != ASN1_SUCCESS) {
+	if ((result = asn1_write_value(structure, "message", gossip.c_str(),
+	        strlen (gossip.c_str()))) != ASN1_SUCCESS) {
 	    asn1_perror (result);
 	}
 
 	result = asn1_der_coding (structure, "", dataBuff, &size, errorDescription);
+	
 	asn1_delete_structure (&structure);
 	asn1_delete_structure (&definitions);
 
-    printf("%s\n", dataBuff);
 	return 0;
 }
 
